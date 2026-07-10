@@ -1,0 +1,50 @@
+import path from 'node:path';
+
+async function ok(promise) {
+  const r = await promise;
+  if (r.code !== 0) throw new Error(r.stderr.trim() || `git exit ${r.code}`);
+  return r;
+}
+
+export function createGit(run, { root }) {
+  const git = (...args) => run('git', args);
+  return {
+    async clone(url, name) {
+      const dest = `${root}/${name}`;
+      await ok(git('clone', url, dest));
+      return dest;
+    },
+    async remoteUrl(dir) {
+      const { stdout } = await ok(git('-C', dir, 'remote', 'get-url', 'origin'));
+      return stdout.trim();
+    },
+    async currentBranch(dir) {
+      const { stdout } = await ok(git('-C', dir, 'rev-parse', '--abbrev-ref', 'HEAD'));
+      return stdout.trim();
+    },
+    async worktreeAdd(mainDir, worktreeDir, branch) {
+      await ok(git('-C', mainDir, 'worktree', 'add', worktreeDir, '-b', branch));
+    },
+    async worktreeRemove(mainDir, worktreeDir, { force = false } = {}) {
+      const args = ['-C', mainDir, 'worktree', 'remove'];
+      if (force) args.push('--force');
+      args.push(worktreeDir);
+      await ok(git(...args));
+    },
+    async worktreeList(mainDir) {
+      const { stdout } = await ok(git('-C', mainDir, 'worktree', 'list', '--porcelain'));
+      return stdout.split('\n').filter((l) => l.startsWith('worktree ')).map((l) => l.slice('worktree '.length));
+    },
+    async commonGitDir(dir) {
+      const { stdout } = await ok(git('-C', dir, 'rev-parse', '--git-common-dir'));
+      const p = stdout.trim();
+      return path.isAbsolute(p) ? p : path.join(dir, p);
+    },
+    async diffStat(dir, baseBranch) {
+      const { stdout } = await ok(git('-C', dir, 'diff', '--shortstat', `${baseBranch}...HEAD`));
+      const ins = /(\d+) insertion/.exec(stdout);
+      const del = /(\d+) deletion/.exec(stdout);
+      return { added: ins ? Number(ins[1]) : 0, removed: del ? Number(del[1]) : 0 };
+    },
+  };
+}
