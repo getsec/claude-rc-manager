@@ -14,7 +14,7 @@ export function LogView({ instance, onClose }) {
   useEffect(() => {
     setLines([]);
     const es = new EventSource(`/api/sessions/${instance}/logs`);
-    es.onmessage = (e) => setLines((prev) => [...prev, e.data].slice(-500));
+    es.onmessage = (e) => setLines(e.data.split('\n'));
     return () => es.close();
   }, [instance]);
 
@@ -27,7 +27,7 @@ export function LogView({ instance, onClose }) {
       <div className="drawer-head">
         <span className="drawer-dot" />
         <span className="drawer-title">{instance}</span>
-        <span className="drawer-sub">· live journal</span>
+        <span className="drawer-sub">· live tmux pane</span>
         <button className="drawer-close" onClick={onClose}>close</button>
       </div>
       <div className="drawer-body" ref={boxRef}>

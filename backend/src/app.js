@@ -48,8 +48,9 @@ export function createApp(deps) {
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache');
     reply.hijack();
-    const handle = systemd.streamLogs(req.params.instance, (line) => {
-      reply.raw.write(`data: ${line.replace(/\n/g, ' ')}\n\n`);
+    const handle = systemd.streamPane(req.params.instance, (snapshot) => {
+      const payload = snapshot.split('\n').map((l) => `data: ${l}`).join('\n');
+      reply.raw.write(`${payload}\n\n`);
     });
     req.raw.on('close', () => handle.kill());
   });
