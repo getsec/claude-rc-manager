@@ -4,7 +4,11 @@ import { WebSocketServer } from 'ws';
 // validation boundary: anything that is not a safe instance name never matches.
 const TERMINAL_PATH = /^\/api\/sessions\/([A-Za-z0-9._-]+)\/terminal$/;
 
-const DEAD = '\r\n\x1b[33msession is not running — start it from the card above\x1b[0m\r\n';
+// "from the card above" was written when the terminal was an inline drawer; it
+// is now a fullscreen overlay, so no card is visible. This also fires when the
+// unit restarts under an open terminal (e.g. toggling remote control), where
+// the session is coming back rather than stopped — hence "close and reopen".
+const DEAD = '\r\n\x1b[33msession is not running — close this terminal and reopen it once the session is started\x1b[0m\r\n';
 
 // Shared policy for both the connect path (size()) and the resize control
 // frame: reject (never clamp) anything that is not a positive integer up to

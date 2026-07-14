@@ -141,7 +141,7 @@ export function App() {
               onAction={(instance, action) => api.action(instance, action)}
               onTerminal={(instance) => setTerminalInstance((cur) => (cur === instance ? null : instance))}
               onRemove={removeSessionCard}
-              onRemoteControl={(instance, enabled) => api.setRemoteControl(instance, enabled)}
+              onRemoteControl={(instance, enabled) => api.setRemoteControl(instance, enabled).catch(() => {})}
             />
           );
         })}
