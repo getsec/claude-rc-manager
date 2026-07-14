@@ -20,7 +20,40 @@ it to loopback (the default) or add your LAN IP to reach it from other devices a
 - The `claude` CLI, logged in with a full-scope login token (`claude /login`)
 - A directory of repos at `~/remote-projects` (override with `AM_REMOTE_ROOT`)
 
-## One-time setup
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/getsec/claude-rc-manager/main/install.sh | bash
+```
+
+Checks the requirements above, clones to `~/agent-manager`, builds the SPA, and installs
+and starts the `agent-manager` user service. It never uses sudo: everything lands under
+`$HOME` and runs as your own user. If something is missing it tells you what, and stops
+without changing anything.
+
+Re-running it is also the update path. It pulls, rebuilds, and restarts in place, and
+refuses if you have uncommitted changes in the checkout.
+
+Set any of these on the pipe to override them:
+
+```bash
+curl -fsSL .../install.sh | AM_BIND=127.0.0.1,192.168.1.50 bash
+```
+
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `AM_DIR` | `~/agent-manager` | Where to clone the source |
+| `AM_BIND` | `127.0.0.1` | Hosts to bind (see the security note below) |
+| `AM_PORT` | `8787` | Port |
+| `AM_REMOTE_ROOT` | `~/remote-projects` | Where repos are cloned |
+| `AM_BRANCH` | `main` | Branch to install |
+
+Prefer to read before you pipe? `curl -fsSL .../install.sh -o install.sh`, read it, then
+`bash install.sh`.
+
+## Manual setup
+
+The installer does all of this for you. These are the same steps by hand.
 
 1. Let your user services run at boot and without an active login:
    ```bash
