@@ -1,5 +1,5 @@
 import { test, expect, vi, beforeEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, screen, fireEvent } from '@testing-library/react';
 import { Terminal } from './Terminal.jsx';
 
 // xterm needs real DOM measurement that jsdom does not provide, so the emulator
@@ -109,4 +109,25 @@ test('a message that arrives after unmount is not written to the disposed termin
   unmount();
   expect(() => lateHandler({ data: new TextEncoder().encode('late').buffer })).not.toThrow();
   expect(term.write).not.toHaveBeenCalled();
+});
+
+test('the close button calls onClose', () => {
+  const calls = [];
+  render(<Terminal instance="app" onClose={() => calls.push('closed')} />);
+  fireEvent.click(screen.getByText('close'));
+  expect(calls).toEqual(['closed']);
+});
+
+test('body scroll is locked while open and restored on unmount', () => {
+  // Otherwise dragging inside the terminal scrolls the dashboard behind it.
+  const { unmount } = render(<Terminal instance="app" onClose={() => {}} />);
+  expect(document.body.style.overflow).toBe('hidden');
+  unmount();
+  expect(document.body.style.overflow).toBe('');
+});
+
+test('renders as a fullscreen overlay, not an inline drawer', () => {
+  const { container } = render(<Terminal instance="app" onClose={() => {}} />);
+  expect(container.querySelector('.term-overlay')).toBeTruthy();
+  expect(container.querySelector('.drawer')).toBeNull();
 });

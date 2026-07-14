@@ -12,6 +12,14 @@ const isSafeDim = (v) => Number.isInteger(v) && v > 0 && v <= MAX_DIM;
 export function Terminal({ instance, onClose }) {
   const hostRef = useRef(null);
 
+  // The overlay covers the page; without this, dragging inside the terminal
+  // scrolls the dashboard behind it.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     const term = new XTerm({
@@ -86,14 +94,14 @@ export function Terminal({ instance, onClose }) {
   }, [instance]);
 
   return (
-    <div className="drawer">
-      <div className="drawer-head">
+    <div className="term-overlay">
+      <div className="term-bar">
         <span className="drawer-dot" />
         <span className="drawer-title">{instance}</span>
-        <span className="drawer-sub">· live terminal · click to type</span>
+        <span className="drawer-sub">· live terminal</span>
         <button className="drawer-close" onClick={onClose}>close</button>
       </div>
-      <div className="drawer-term" ref={hostRef} />
+      <div className="term-body" ref={hostRef} />
     </div>
   );
 }

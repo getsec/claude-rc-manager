@@ -166,16 +166,20 @@ body {
 .status-pill.starting { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .status-pill.stopped { color: #8a938c; background: rgba(139, 147, 140, .12); }
 
-/* ---------- logs drawer ---------- */
-.drawer { margin-top: 16px; border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: #0a0c0f; }
-.drawer-head { display: flex; align-items: center; gap: 9px; padding: 10px 14px; background: var(--surface-flat); border-bottom: 1px solid #1c222a; }
+/* ---------- terminal overlay ---------- */
+.term-overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: #0a0c0f; }
+/* 100dvh, not 100vh: on mobile Safari/Chrome 100vh means "viewport with the
+   address bar hidden", so the bottom rows — where Claude's input box is — end
+   up under the browser chrome. */
+.term-overlay { height: 100dvh; }
+.term-bar { display: flex; align-items: center; gap: 9px; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); background: var(--surface-flat); border-bottom: 1px solid #1c222a; flex: 0 0 auto; }
 .drawer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.4s ease-in-out infinite; }
 .drawer-title { font-size: 12px; font-weight: 600; }
 .drawer-sub { font-size: 11px; color: #5a636f; }
 .drawer-close { margin-left: auto; border: 0; background: var(--btn); color: #aeb7c2; font: inherit; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
 .drawer-close:hover { color: var(--text); }
-.drawer-term { height: 460px; padding: 8px 10px; }
-.drawer-term .xterm { height: 100%; }
+.term-body { flex: 1 1 auto; min-height: 0; padding: 8px 10px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+.term-body .xterm { height: 100%; }
 
 /* ---------- projects ---------- */
 .projects-list { display: flex; flex-direction: column; gap: 10px; }
