@@ -59,6 +59,26 @@ test('replace names what will be lost and does nothing if declined', async () =>
   confirm.mockRestore();
 });
 
+test('a failed risk check is reported as unknown risk, never as clean', async () => {
+  vi.spyOn(api, 'getState').mockResolvedValue({ sessions: [], projects: {} });
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  vi.spyOn(api, 'addProject').mockImplementation(async (url, opts, onStep) => {
+    // null = the git query itself failed. Reporting that as "nothing to lose"
+    // is the failure this warning exists to prevent, so a regression from
+    // `== null` to `> 0` must fail here rather than ship green.
+    onStep({ step: 'exists', status: 'fail', name: 'foo', exists: true, sameRepo: true, dirtyFiles: null, localOnlyCommits: null });
+  });
+  render(<App />);
+  fireEvent.change(screen.getByPlaceholderText('git URL to clone…'), { target: { value: 'https://example.com/foo.git' } });
+  fireEvent.click(screen.getByText('Add project'));
+  fireEvent.click(await screen.findByText(/replace/));
+  const msg = confirm.mock.calls[0][0];
+  expect(msg).toMatch(/unknown number of uncommitted changes/);
+  expect(msg).toMatch(/possible commits that are on no remote/);
+  expect(msg).not.toMatch(/clone it fresh\?$/); // must not fall through to the no-risk wording
+  confirm.mockRestore();
+});
+
 test('reuse retries the add with onExisting: reuse', async () => {
   vi.spyOn(api, 'getState').mockResolvedValue({ sessions: [], projects: {} });
   const addProject = vi.spyOn(api, 'addProject').mockImplementation(async (url, opts, onStep) => {
