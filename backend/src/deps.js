@@ -11,6 +11,7 @@ import { createTemplate } from './template.js';
 import { createProtocols } from './protocols.js';
 import { createMultiAgent } from './multiagent.js';
 import { createTmux } from './tmux.js';
+import { createRc } from './rc.js';
 
 export function buildDeps() {
   const systemd = createSystemd(run);
@@ -18,6 +19,7 @@ export function buildDeps() {
   const coord = createCoord(run, { root: config.remoteRoot });
   const store = createStore(config.statePath);
   const template = createTemplate({ unitDir: config.unitDir, daemonReload: () => systemd.daemonReload() });
+  const rc = createRc({ unitDir: config.unitDir, daemonReload: () => systemd.daemonReload() });
   const trust = createTrust({
     claudeJson: config.claudeJson,
     isRunning: async (absPath) => {
@@ -33,5 +35,5 @@ export function buildDeps() {
   const protocols = createProtocols({ dir: config.protocolsDir });
   const multiAgent = createMultiAgent({ git });
   const tmux = createTmux(spawn);
-  return { systemd, git, trust, coord, store, template, config, protocols, multiAgent, tmux };
+  return { systemd, git, trust, coord, store, template, config, protocols, multiAgent, tmux, rc };
 }
