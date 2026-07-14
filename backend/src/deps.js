@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { run, stream } from './lib/exec.js';
+import { run } from './lib/exec.js';
 import { config } from './config.js';
 import { createSystemd } from './systemd.js';
 import { createGit } from './git.js';
@@ -11,7 +11,7 @@ import { createProtocols } from './protocols.js';
 import { createMultiAgent } from './multiagent.js';
 
 export function buildDeps() {
-  const systemd = createSystemd(run, stream);
+  const systemd = createSystemd(run);
   const git = createGit(run, { root: config.remoteRoot });
   const coord = createCoord(run, { root: config.remoteRoot });
   const store = createStore(config.statePath);

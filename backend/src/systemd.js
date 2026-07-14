@@ -6,7 +6,7 @@ async function ok(promise) {
   return r;
 }
 
-export function createSystemd(run, stream) {
+export function createSystemd(run) {
   const uctl = (...args) => run('systemctl', ['--user', ...args]);
 
   return {
@@ -41,11 +41,32 @@ export function createSystemd(run, stream) {
     async disableNow(i) { await ok(uctl('disable', '--now', `claude-rc@${i}`)); },
     async daemonReload() { await ok(uctl('daemon-reload')); },
     async restartAll() { await ok(uctl('restart', 'claude-rc@*')); },
-    streamLogs(instance, onLine) {
-      return stream('journalctl', ['--user', '-f', '-n', '100', '-u', `claude-rc@${instance}.service`], onLine);
+    async capturePane(instance, { scrollback = 0 } = {}) {
+      const args = ['-L', `rc-${instance}`, 'capture-pane', '-p', '-t', `claude-rc-${instance}`];
+      if (scrollback) args.push('-S', `-${scrollback}`);
+      return run('tmux', args);
+    },
+    streamPane(instance, onSnapshot, intervalMs = 1000) {
+      let stopped = false;
+      let last = null;
+      const capturePane = this.capturePane;
+      const tick = async () => {
+        const r = await capturePane(instance, { scrollback: 1000 });
+        if (stopped || r.code !== 0) return;
+        const lines = r.stdout.split('\n');
+        while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+        const trimmed = lines.join('\n');
+        if (trimmed !== last) {
+          last = trimmed;
+          onSnapshot(trimmed);
+        }
+      };
+      tick();
+      const timer = setInterval(tick, intervalMs);
+      return { kill: () => { stopped = true; clearInterval(timer); } };
     },
     async sessionUrl(instance) {
-      const r = await run('tmux', ['-L', `rc-${instance}`, 'capture-pane', '-p', '-t', `claude-rc-${instance}`]);
+      const r = await this.capturePane(instance);
       if (r.code !== 0) return null;
       const m = r.stdout.match(/https:\/\/claude\.ai\/code\/session_[A-Za-z0-9_-]+/);
       return m ? m[0] : null;
