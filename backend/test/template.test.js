@@ -33,3 +33,19 @@ test('template gives claude a PTY via a private per-service tmux socket', () => 
   assert.match(TEMPLATE_UNIT, /tmux -L rc-%i/);
   assert.match(TEMPLATE_UNIT, /Type=forking/);
 });
+
+test('TEMPLATE_UNIT runs claude with expandable RC args, defaulting to remote control on', () => {
+  // Multi-arg: systemd does not expand $VAR inside single quotes, so the
+  // claude command cannot be wrapped in '...' any more.
+  assert.match(
+    TEMPLATE_UNIT,
+    /^ExecStart=\/usr\/bin\/tmux -L rc-%i new-session -d -s claude-rc-%i %h\/\.local\/bin\/claude \$AM_RC_ARGS$/m,
+  );
+  assert.ok(!/ExecStart=.*'.*claude.*'/.test(TEMPLATE_UNIT), 'claude command must not be single-quoted');
+  // Default for instances with no drop-in stays RC-on: every pre-existing
+  // session lacks a drop-in, and flipping this would silently strip their RC.
+  assert.match(
+    TEMPLATE_UNIT,
+    /^Environment=AM_RC_ARGS=--remote-control --remote-control-session-name-prefix %i$/m,
+  );
+});
