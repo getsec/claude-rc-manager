@@ -13,11 +13,12 @@ test('POST /api/projects streams clone→trust→enable→record→done', async 
     git: { clone: async (url, name) => { calls.push(`clone ${name}`); return `/repos/${name}`; } },
     trust: { preseed: async (p) => calls.push(`trust ${p}`) },
     store: { setProject: async (n) => calls.push(`record ${n}`), all: async () => ({}) },
+    rc: { set: async () => {}, isEnabled: async () => true },
     config: { remoteRoot: '/repos' },
   });
   const res = await app.inject({ method: 'POST', url: '/api/projects', payload: { url: 'https://x/foo.git' } });
   const steps = ndjson(res.body).map((s) => s.step);
-  assert.deepEqual(steps, ['derive', 'clone', 'trust', 'enable', 'record', 'done']);
+  assert.deepEqual(steps, ['derive', 'clone', 'trust', 'remote-control', 'enable', 'record', 'done']);
   assert.deepEqual(calls, ['clone foo', 'trust /repos/foo', 'enable foo', 'record foo']);
 });
 
@@ -76,6 +77,7 @@ test('POST /api/projects with multiSession scaffolds coord and drops MULTI_AGENT
     coord: { scaffold: async (n, r) => calls.push(`scaffold ${n} ${r.primaryWorktree} ${r.primaryBranch}`) },
     protocols: { exists: async () => true, get: async (slug) => ({ slug, body: 'Hi ${PROJECT}', vars: { X: '1' } }) },
     multiAgent: { drop: async (dir, md) => calls.push(`drop ${dir} ${md}`) },
+    rc: { set: async () => {}, isEnabled: async () => true },
     config: { remoteRoot: '/repos' },
   });
   const res = await app.inject({
@@ -84,7 +86,7 @@ test('POST /api/projects with multiSession scaffolds coord and drops MULTI_AGENT
     payload: { url: 'https://x/foo.git', multiSession: true, protocol: 'compose-portblock', vars: {} },
   });
   const steps = res.body.trim().split('\n').map((l) => JSON.parse(l));
-  assert.deepEqual(steps.map((s) => s.step), ['derive', 'clone', 'trust', 'enable', 'record', 'coord', 'multi-agent', 'done']);
+  assert.deepEqual(steps.map((s) => s.step), ['derive', 'clone', 'trust', 'remote-control', 'enable', 'record', 'coord', 'multi-agent', 'done']);
   assert.ok(calls.includes('scaffold foo foo main'));
   assert.ok(calls.includes('drop /repos/foo Hi foo'));
 });
@@ -98,6 +100,7 @@ test('POST /api/projects with multiSession fails cleanly on an unknown protocol'
     coord: { scaffold: async () => {} },
     protocols: { exists: async () => false, get: async () => { throw new Error('should not be called'); } },
     multiAgent: { drop: async () => { throw new Error('should not be called'); } },
+    rc: { set: async () => {}, isEnabled: async () => true },
     config: { remoteRoot: '/repos' },
   });
   const res = await app.inject({

@@ -12,6 +12,7 @@ function deps(overrides = {}) {
     store: { all: async () => ({ app: { url: 'u' } }), ...overrides.store },
     config: { remoteRoot: '/repos' },
     git: { ...overrides.git },
+    rc: { set: async () => {}, isEnabled: async () => true, ...overrides.rc },
   };
 }
 

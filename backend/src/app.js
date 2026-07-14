@@ -11,12 +11,15 @@ function isSafeGitUrl(url) {
 }
 
 export function createApp(deps) {
-  const { systemd, store, git, trust, coord, config, protocols, multiAgent } = deps;
+  const { systemd, store, git, trust, coord, config, protocols, multiAgent, rc } = deps;
   const app = Fastify({ logger: false });
 
   async function snapshot() {
     const instances = await systemd.list();
-    return Promise.all(instances.map((i) => systemd.show(i)));
+    return Promise.all(instances.map(async (i) => ({
+      ...(await systemd.show(i)),
+      remoteControl: await rc.isEnabled(i),
+    })));
   }
 
   app.get('/api/state', async () => ({
@@ -69,6 +72,22 @@ export function createApp(deps) {
     return { branch, added, removed };
   });
 
+  app.post('/api/sessions/:instance/remote-control', async (req, reply) => {
+    const { instance } = req.params;
+    const enabled = !!(req.body && req.body.enabled);
+    try {
+      await rc.set(instance, enabled);
+    } catch (e) {
+      // The unit's config did not change, so restarting would silently
+      // re-run the old command. Leave it alone and say why.
+      return reply.code(400).send({ error: String(e.message) });
+    }
+    // ExecStart is only read at start, so RC only changes on restart.
+    const before = await systemd.show(instance);
+    if (before.activeState === 'active') await systemd.restart(instance);
+    return { ...(await systemd.show(instance)), remoteControl: enabled };
+  });
+
   const ACTIONS = new Set(['start', 'stop', 'restart']);
   app.post('/api/sessions/:instance/:action', async (req, reply) => {
     const { instance, action } = req.params;
@@ -90,7 +109,7 @@ export function createApp(deps) {
       step({ step: 'validate', status: 'fail', message: 'unsupported or unsafe git URL (expected http(s)/ssh/git URL)' });
       return reply.raw.end();
     }
-    const { multiSession, protocol, vars } = req.body || {};
+    const { multiSession, protocol, vars, remoteControl } = req.body || {};
     try {
       const name = deriveName(req.body.url);
       step({ step: 'derive', status: 'ok', name });
@@ -98,6 +117,8 @@ export function createApp(deps) {
       step({ step: 'clone', status: 'ok', dest });
       await trust.preseed(dest);
       step({ step: 'trust', status: 'ok' });
+      await rc.set(name, !!remoteControl);
+      step({ step: 'remote-control', status: 'ok', enabled: !!remoteControl });
       await systemd.enableNow(name);
       step({ step: 'enable', status: 'ok' });
       await store.setProject(name, { url: req.body.url });
@@ -240,6 +261,8 @@ export function createApp(deps) {
       const date = new Date().toISOString().slice(0, 10);
       await coord.addSessionRow(name, { worktree, branch, date });
       step({ step: 'coord-row', status: 'ok' });
+      await rc.set(worktree, !!(req.body && req.body.remoteControl));
+      step({ step: 'remote-control', status: 'ok', enabled: !!(req.body && req.body.remoteControl) });
       await systemd.enableNow(worktree);
       step({ step: 'enable', status: 'ok' });
       step({ step: 'done', status: 'ok', worktree });
