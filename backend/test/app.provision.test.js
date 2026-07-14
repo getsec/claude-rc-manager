@@ -12,7 +12,8 @@ test('POST /api/projects streams clone→trust→enable→record→done', async 
     systemd: { enableNow: async (n) => calls.push(`enable ${n}`), list: async () => [] },
     git: { clone: async (url, name) => { calls.push(`clone ${name}`); return `/repos/${name}`; } },
     trust: { preseed: async (p) => calls.push(`trust ${p}`) },
-    store: { setProject: async (n) => calls.push(`record ${n}`), all: async () => ({}) },
+    store: { get: async () => null, setProject: async (n) => calls.push(`record ${n}`), all: async () => ({}) },
+    dest: { inspect: async () => ({ exists: false }), remove: async () => {} },
     rc: { set: async () => {}, isEnabled: async () => true },
     config: { remoteRoot: '/repos' },
   });
@@ -27,7 +28,8 @@ test('POST /api/projects emits error step and stops on clone failure', async () 
     systemd: { enableNow: async () => {} },
     git: { clone: async () => { throw new Error('repo not found'); } },
     trust: { preseed: async () => { throw new Error('should not reach'); } },
-    store: { setProject: async () => {} },
+    store: { get: async () => null, setProject: async () => {} },
+    dest: { inspect: async () => ({ exists: false }), remove: async () => {} },
     config: { remoteRoot: '/repos' },
   });
   const res = await app.inject({ method: 'POST', url: '/api/projects', payload: { url: 'https://x/foo.git' } });
@@ -54,7 +56,8 @@ test('POST /api/projects rejects an unsafe git URL before cloning', async () => 
     systemd: { enableNow: async () => {} },
     git: { clone: async () => { cloned = true; return '/x'; } },
     trust: { preseed: async () => {} },
-    store: { setProject: async () => {} },
+    store: { get: async () => null, setProject: async () => {} },
+    dest: { inspect: async () => ({ exists: false }), remove: async () => {} },
     config: { remoteRoot: '/repos' },
   });
   const res = await app.inject({ method: 'POST', url: '/api/projects', payload: { url: 'ext::sh -c touch/**/pwned' } });
@@ -73,7 +76,8 @@ test('POST /api/projects with multiSession scaffolds coord and drops MULTI_AGENT
       currentBranch: async () => 'main',
     },
     trust: { preseed: async (p) => calls.push(`trust ${p}`) },
-    store: { setProject: async (n, info) => calls.push(`record ${n} ${JSON.stringify(info)}`), all: async () => ({}) },
+    store: { get: async () => null, setProject: async (n, info) => calls.push(`record ${n} ${JSON.stringify(info)}`), all: async () => ({}) },
+    dest: { inspect: async () => ({ exists: false }), remove: async () => {} },
     coord: { scaffold: async (n, r) => calls.push(`scaffold ${n} ${r.primaryWorktree} ${r.primaryBranch}`) },
     protocols: { exists: async () => true, get: async (slug) => ({ slug, body: 'Hi ${PROJECT}', vars: { X: '1' } }) },
     multiAgent: { drop: async (dir, md) => calls.push(`drop ${dir} ${md}`) },
@@ -96,7 +100,8 @@ test('POST /api/projects with multiSession fails cleanly on an unknown protocol'
     systemd: { enableNow: async () => {} },
     git: { clone: async (url, name) => `/repos/${name}`, currentBranch: async () => 'main' },
     trust: { preseed: async () => {} },
-    store: { setProject: async () => {} },
+    store: { get: async () => null, setProject: async () => {} },
+    dest: { inspect: async () => ({ exists: false }), remove: async () => {} },
     coord: { scaffold: async () => {} },
     protocols: { exists: async () => false, get: async () => { throw new Error('should not be called'); } },
     multiAgent: { drop: async () => { throw new Error('should not be called'); } },

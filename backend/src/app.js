@@ -11,7 +11,7 @@ function isSafeGitUrl(url) {
 }
 
 export function createApp(deps) {
-  const { systemd, store, git, trust, coord, config, protocols, multiAgent, rc } = deps;
+  const { systemd, store, git, trust, coord, config, protocols, multiAgent, rc, dest } = deps;
   const app = Fastify({ logger: false });
 
   async function snapshot() {
@@ -109,13 +109,45 @@ export function createApp(deps) {
       step({ step: 'validate', status: 'fail', message: 'unsupported or unsafe git URL (expected http(s)/ssh/git URL)' });
       return reply.raw.end();
     }
-    const { multiSession, protocol, vars, remoteControl } = req.body || {};
+    const { multiSession, protocol, vars, remoteControl, onExisting } = req.body || {};
     try {
       const name = deriveName(req.body.url);
       step({ step: 'derive', status: 'ok', name });
-      const dest = await git.clone(req.body.url, name);
-      step({ step: 'clone', status: 'ok', dest });
-      await trust.preseed(dest);
+
+      if (await store.get(name)) {
+        step({ step: 'exists', status: 'fail', name, managed: true, message: `${name} is already a project — remove it first` });
+        return reply.raw.end();
+      }
+
+      const found = await dest.inspect(name, req.body.url);
+      let dir = null;
+      if (found.exists && !onExisting) {
+        step({ step: 'exists', status: 'fail', name, ...found, message: `${config.remoteRoot}/${name} already exists` });
+        return reply.raw.end();
+      }
+      if (found.exists && onExisting === 'reuse') {
+        if (!found.sameRepo) {
+          step({ step: 'exists', status: 'fail', name, ...found, message: `${name} is a different repo (origin ${found.remoteUrl || 'none'}) — cannot reuse` });
+          return reply.raw.end();
+        }
+        dir = found.dir;
+        step({ step: 'reuse', status: 'ok', dest: dir });
+      } else if (found.exists && onExisting === 'replace') {
+        // Deleting the main checkout would break every worktree hanging off it.
+        const extras = (await systemd.list()).filter((i) => i.startsWith(`${name}-`));
+        if (extras.length) {
+          step({ step: 'exists', status: 'fail', name, message: `remove worktree sessions first: ${extras.join(', ')}` });
+          return reply.raw.end();
+        }
+        await dest.remove(name);
+        step({ step: 'replace', status: 'ok' });
+      }
+
+      if (!dir) {
+        dir = await git.clone(req.body.url, name);
+        step({ step: 'clone', status: 'ok', dest: dir });
+      }
+      await trust.preseed(dir);
       step({ step: 'trust', status: 'ok' });
       await rc.set(name, !!remoteControl);
       step({ step: 'remote-control', status: 'ok', enabled: !!remoteControl });
@@ -124,7 +156,7 @@ export function createApp(deps) {
       await store.setProject(name, { url: req.body.url });
       step({ step: 'record', status: 'ok' });
       if (multiSession) {
-        const branch = await git.currentBranch(dest);
+        const branch = await git.currentBranch(dir);
         const date = new Date().toISOString().slice(0, 10);
         await coord.scaffold(name, { primaryWorktree: name, primaryBranch: branch, date });
         step({ step: 'coord', status: 'ok' });
@@ -133,7 +165,7 @@ export function createApp(deps) {
         }
         const proto = await protocols.get(protocol);
         const rendered = render(proto.body, { PROJECT: name, COORD_DIR: `../${name}-coord`, ...proto.vars, ...(vars || {}) });
-        await multiAgent.drop(dest, rendered);
+        await multiAgent.drop(dir, rendered);
         step({ step: 'multi-agent', status: 'ok' });
         await store.setProject(name, { multiSession: true, protocol, vars: vars || {}, multiAgentMd: rendered });
       }
