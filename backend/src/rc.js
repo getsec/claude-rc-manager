@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import path from 'node:path';
 
 const SAFE_INSTANCE = /^[A-Za-z0-9._-]+$/;
@@ -32,7 +32,9 @@ export function createRc({ unitDir, daemonReload }) {
       // The whole assignment must be quoted. Unquoted, systemd splits on
       // spaces and parses the rest as further assignments, silently
       // truncating the value to `--remote-control`.
-      await writeFile(file, `[Service]\nEnvironment="AM_RC_ARGS=${enabled ? RC_ARGS : ''}"\n`);
+      const tmp = `${file}.tmp`;
+      await writeFile(tmp, `[Service]\nEnvironment="AM_RC_ARGS=${enabled ? RC_ARGS : ''}"\n`);
+      await rename(tmp, file);
       await daemonReload();
     },
   };

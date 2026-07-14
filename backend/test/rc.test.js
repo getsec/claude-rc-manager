@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, mkdir, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRc } from '../src/rc.js';
@@ -66,4 +66,13 @@ test('isEnabled reports false for a hand-written drop-in with an empty value', a
   await mkdir(path.join(unitDir, 'claude-rc@hand.service.d'), { recursive: true });
   await writeFile(path.join(unitDir, 'claude-rc@hand.service.d', 'rc.conf'), '[Service]\nEnvironment="AM_RC_ARGS="\n');
   assert.equal(await rc.isEnabled('hand'), false);
+});
+
+test('set() does not leave a temp file behind in the drop-in directory', async () => {
+  const { rc, unitDir } = await harness();
+  await rc.set('app', true);
+  const dirPath = path.join(unitDir, 'claude-rc@app.service.d');
+  const entries = (await readdir(dirPath)).sort();
+  // Only rc.conf should be present; no temp files or other files.
+  assert.deepEqual(entries, ['rc.conf']);
 });
