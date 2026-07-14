@@ -83,7 +83,7 @@ test('dirtyCount counts porcelain lines', async () => {
     return { code: 0, stdout: ' M src/a.js\n?? new.txt\n', stderr: '' };
   }, { root: '/repos' });
   assert.equal(await g.dirtyCount('/repos/foo'), 2);
-  assert.ok(calls.includes('-C /repos/foo status --porcelain'));
+  assert.ok(calls.includes('-C /repos/foo status --porcelain --untracked-files=all'));
 });
 
 test('dirtyCount is 0 for a clean tree', async () => {

@@ -47,11 +47,16 @@ export function createGit(run, { root }) {
       return { added: ins ? Number(ins[1]) : 0, removed: del ? Number(del[1]) : 0 };
     },
     async dirtyCount(dir) {
-      const { stdout } = await ok(git('-C', dir, 'status', '--porcelain'));
+      // --untracked-files=all is load-bearing: without it, git status --porcelain
+      // collapses an entire untracked directory to a single ?? line, silently undercounting
+      // the work that would be destroyed in a replace (delete + re-clone).
+      const { stdout } = await ok(git('-C', dir, 'status', '--porcelain', '--untracked-files=all'));
       return stdout.split('\n').filter((l) => l.trim()).length;
     },
     // Commits that exist on no remote, across ALL branches — not just the one
     // checked out. This is the work a replace would destroy irrecoverably.
+    // Note: --branches only expands refs/heads/*, so commits reachable only from a
+    // detached HEAD are invisible to this count. This is a known blind spot.
     async localOnlyCount(dir) {
       const { stdout } = await ok(git('-C', dir, 'log', '--branches', '--not', '--remotes', '--format=%H'));
       return stdout.split('\n').filter((l) => l.trim()).length;
