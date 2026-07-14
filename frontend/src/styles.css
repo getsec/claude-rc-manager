@@ -175,6 +175,8 @@ body {
 .drawer-close { margin-left: auto; border: 0; background: var(--btn); color: #aeb7c2; font: inherit; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
 .drawer-close:hover { color: var(--text); }
 .drawer-body { max-height: 480px; overflow: auto; padding: 12px 14px; font-size: 11.5px; line-height: 1.5; }
+.drawer-term { height: 460px; padding: 8px 10px; }
+.drawer-term .xterm { height: 100%; }
 .log-line { white-space: pre-wrap; word-break: break-all; color: #c2cad4; }
 .log-line.err { color: var(--danger); }
 .log-line.warn { color: var(--warn); }

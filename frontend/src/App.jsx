@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { SessionCard } from './components/SessionCard.jsx';
 import { AddProject } from './components/AddProject.jsx';
 import { AddSession } from './components/AddSession.jsx';
-import { LogView } from './components/LogView.jsx';
+import { Terminal } from './components/Terminal.jsx';
 import { Protocols } from './components/Protocols.jsx';
 import { EnableMultiSession } from './components/EnableMultiSession.jsx';
 import { MultiAgentEditor } from './components/MultiAgentEditor.jsx';
@@ -146,7 +146,7 @@ export function App() {
       </div>
       {sessions.length === 0 && <p className="empty">No sessions yet — add a repo to start one.</p>}
 
-      {logInstance && <LogView instance={logInstance} onClose={() => setLogInstance(null)} />}
+      {logInstance && <Terminal instance={logInstance} onClose={() => setLogInstance(null)} />}
 
       <div className="section-head">
         <span className="section-label">Projects</span>
