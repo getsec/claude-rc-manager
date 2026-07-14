@@ -44,8 +44,10 @@ test('TEMPLATE_UNIT runs claude with expandable RC args, defaulting to remote co
   assert.ok(!/ExecStart=.*'.*claude.*'/.test(TEMPLATE_UNIT), 'claude command must not be single-quoted');
   // Default for instances with no drop-in stays RC-on: every pre-existing
   // session lacks a drop-in, and flipping this would silently strip their RC.
-  assert.match(
-    TEMPLATE_UNIT,
-    /^Environment=AM_RC_ARGS=--remote-control --remote-control-session-name-prefix %i$/m,
-  );
+  // The whole assignment must be quoted: unquoted, systemd splits
+  // Environment= on whitespace and treats each token as a separate
+  // assignment, silently discarding everything after the first space.
+  const envLine = TEMPLATE_UNIT.match(/^Environment="AM_RC_ARGS=(.*)"$/m);
+  assert.ok(envLine, 'AM_RC_ARGS default must be a single quoted Environment= assignment');
+  assert.equal(envLine[1], '--remote-control --remote-control-session-name-prefix %i');
 });

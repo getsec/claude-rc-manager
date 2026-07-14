@@ -23,7 +23,7 @@ Type=forking
 GuessMainPID=no
 RemainAfterExit=yes
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
-Environment=AM_RC_ARGS=--remote-control --remote-control-session-name-prefix %i
+Environment="AM_RC_ARGS=--remote-control --remote-control-session-name-prefix %i"
 WorkingDirectory=%h/remote-projects/%i
 ExecStartPre=-/usr/bin/tmux -L rc-%i kill-server
 ExecStart=/usr/bin/tmux -L rc-%i new-session -d -s claude-rc-%i %h/.local/bin/claude $AM_RC_ARGS
