@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { run } from './lib/exec.js';
 import { config } from './config.js';
 import { createSystemd } from './systemd.js';
@@ -9,6 +10,7 @@ import { createStore } from './store.js';
 import { createTemplate } from './template.js';
 import { createProtocols } from './protocols.js';
 import { createMultiAgent } from './multiagent.js';
+import { createTmux } from './tmux.js';
 
 export function buildDeps() {
   const systemd = createSystemd(run);
@@ -30,5 +32,6 @@ export function buildDeps() {
   });
   const protocols = createProtocols({ dir: config.protocolsDir });
   const multiAgent = createMultiAgent({ git });
-  return { systemd, git, trust, coord, store, template, config, protocols, multiAgent };
+  const tmux = createTmux(spawn);
+  return { systemd, git, trust, coord, store, template, config, protocols, multiAgent, tmux };
 }
