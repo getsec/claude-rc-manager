@@ -1,4 +1,5 @@
 import path from 'node:path';
+import * as fsp from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { run } from './lib/exec.js';
 import { config } from './config.js';
@@ -12,10 +13,12 @@ import { createProtocols } from './protocols.js';
 import { createMultiAgent } from './multiagent.js';
 import { createTmux } from './tmux.js';
 import { createRc } from './rc.js';
+import { createDest } from './dest.js';
 
 export function buildDeps() {
   const systemd = createSystemd(run);
   const git = createGit(run, { root: config.remoteRoot });
+  const dest = createDest({ git, root: config.remoteRoot, fsp });
   const coord = createCoord(run, { root: config.remoteRoot });
   const store = createStore(config.statePath);
   const template = createTemplate({ unitDir: config.unitDir, daemonReload: () => systemd.daemonReload() });
@@ -35,5 +38,5 @@ export function buildDeps() {
   const protocols = createProtocols({ dir: config.protocolsDir });
   const multiAgent = createMultiAgent({ git });
   const tmux = createTmux(spawn);
-  return { systemd, git, trust, coord, store, template, config, protocols, multiAgent, tmux, rc };
+  return { systemd, git, trust, coord, store, template, config, protocols, multiAgent, tmux, rc, dest };
 }
