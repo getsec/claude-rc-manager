@@ -37,14 +37,16 @@ export function AddProject({ onSubmit, busy }) {
         />
         <button className="btn-primary" disabled={busy || !url.trim() || (multiSession && !protocol)} onClick={go}>Add project</button>
       </div>
-      <label className="multi-toggle">
-        <input type="checkbox" checked={multiSession} onChange={(e) => setMultiSession(e.target.checked)} />
-        multi-session
-      </label>
-      <label className="multi-toggle">
-        <input type="checkbox" checked={remoteControl} onChange={(e) => setRemoteControl(e.target.checked)} />
-        remote control
-      </label>
+      <div className="toggle-row">
+        <label className="multi-toggle">
+          <input type="checkbox" checked={multiSession} onChange={(e) => setMultiSession(e.target.checked)} />
+          multi-session
+        </label>
+        <label className="multi-toggle">
+          <input type="checkbox" checked={remoteControl} onChange={(e) => setRemoteControl(e.target.checked)} />
+          remote control
+        </label>
+      </div>
       {multiSession && (
         <select className="protocol-pick" value={protocol} onChange={(e) => setProtocol(e.target.value)}>
           {protocols.length === 0 && <option value="">loading…</option>}

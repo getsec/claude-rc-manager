@@ -73,7 +73,10 @@ body {
 .swatch.sel { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px currentColor; }
 
 .addbar-wrap { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
-.multi-toggle { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-dim); cursor: pointer; }
+/* Toggles sit on one row: stacked and right-aligned, each label's checkbox
+   lands at a different x and the header goes ragged. */
+.toggle-row { display: flex; align-items: center; gap: 14px; }
+.multi-toggle { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
 .protocol-pick { height: 28px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-flat); color: var(--text); font: inherit; font-size: 11px; padding: 0 8px; }
 .addbar { display: flex; align-items: stretch; gap: 8px; }
 .addbar input {
@@ -151,7 +154,11 @@ body {
 .act-rst:hover   { background: color-mix(in srgb, var(--warn) 20%, var(--btn)); color: var(--warn); }
 .act-logs:hover, .act-rc:hover  { background: color-mix(in srgb, var(--accent) 14%, var(--btn)); color: var(--accent); }
 .act-logs.on { background: var(--accent-soft); color: var(--accent); }
-.act-rc.on { color: var(--accent); border-color: var(--accent); }
+/* A compact toggle, not a fifth equal action: at flex:1 it stole a whole
+   share of the row and squeezed "terminal". Its .on state matches .act-logs.on
+   — border-color did nothing here, since .card-actions button sets border: 0. */
+.act-rc { flex: 0 0 auto; padding: 6px 10px; }
+.act-rc.on { background: var(--accent-soft); color: var(--accent); }
 .act-open:hover  { background: color-mix(in srgb, var(--accent) 14%, var(--btn)); color: var(--accent); }
 .act-remove:hover { background: color-mix(in srgb, var(--danger) 20%, var(--btn)); color: var(--danger); }
 .card-url-msg { margin-top: 6px; font-size: 10px; color: var(--text-faint); }
@@ -197,10 +204,12 @@ body {
 .project-remove { margin-left: auto; border: 0; background: var(--btn); color: #8f98a4; font: inherit; font-size: 10.5px; font-weight: 600; padding: 4px 11px; border-radius: 7px; cursor: pointer; }
 .project-remove:hover { background: color-mix(in srgb, var(--danger) 20%, var(--btn)); color: var(--danger); }
 
-.addsession { display: flex; gap: 8px; margin-top: 12px; max-width: 360px; }
-.addsession input { flex: 1; height: 30px; border: 1px solid var(--border-strong); border-radius: 8px; background: #0e1216; color: var(--text); padding: 0 11px; font: inherit; font-size: 11px; outline: 0; }
+/* Wide enough for the branch input, the button, and the toggle without any of
+   them wrapping — at 360px the button broke onto two lines ("Add / session"). */
+.addsession { display: flex; align-items: center; gap: 10px; margin-top: 12px; max-width: 500px; }
+.addsession input { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--border-strong); border-radius: 8px; background: #0e1216; color: var(--text); padding: 0 11px; font: inherit; font-size: 11px; outline: 0; }
 .addsession input:focus { border-color: var(--accent); }
-.btn-accent { height: 30px; border: 1px solid var(--accent-border); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 11px; font-weight: 600; padding: 0 12px; border-radius: 8px; cursor: pointer; }
+.btn-accent { height: 30px; flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--accent-border); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 11px; font-weight: 600; padding: 0 12px; border-radius: 8px; cursor: pointer; }
 .btn-accent:disabled { opacity: .5; cursor: not-allowed; }
 .coord-error { margin-top: 9px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--danger); }
 .session-status { margin-top: 9px; font-size: 11px; color: var(--text-dim); }
