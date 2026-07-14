@@ -1,10 +1,12 @@
 # Agent Manager
 
 A local, single-user web control panel for [Claude Code](https://claude.com/claude-code)
-remote-control (RC) sessions, one per repo, each running as a `systemd --user` service.
-It gives you a live dashboard over `systemctl --user` and `journalctl`, one-click
-provisioning (clone, pre-seed trust, enable the session), and a library of coordination
-protocols for running several sessions on one repo without them stepping on each other.
+sessions, one per repo, each running as a `systemd --user` service. It gives you a live
+dashboard over `systemctl --user` and `journalctl`, one-click provisioning (clone,
+pre-seed trust, enable the session), an interactive terminal into any session from the
+browser, and a library of coordination protocols for running several sessions on one repo
+without them stepping on each other. Sessions can optionally run in Claude Code's
+remote-control (RC) mode, reachable from `claude.ai/code` anywhere.
 
 It runs entirely on your own machine as your own user. No root, no cloud, no auth. Bind
 it to loopback (the default) or add your LAN IP to reach it from other devices at home.
@@ -15,9 +17,10 @@ it to loopback (the default) or add your LAN IP to reach it from other devices a
 
 - Linux with systemd (uses `systemctl --user`)
 - Node.js 20+ (tested on 25/26)
-- tmux, since RC sessions run inside a private tmux PTY (see "How sessions run")
+- tmux, since every session runs inside a private tmux PTY (see "How sessions run")
 - git
-- The `claude` CLI, logged in with a full-scope login token (`claude /login`)
+- The `claude` CLI, logged in (`claude /login`). Remote-control mode needs a full-scope
+  login token; the interactive terminal doesn't.
 - A directory of repos at `~/remote-projects` (override with `AM_REMOTE_ROOT`)
 
 ## Install
@@ -120,10 +123,12 @@ One card per `claude-rc@<name>` systemd unit:
   Refreshes every 15s. A worktree session also shows its worktree tag on the same line.
 - Actions: `start`, `stop`, `rst`, and `terminal`, which opens a live interactive
   terminal onto the session's tmux pane. Click it and type; only one is open at a time.
-  `open ↗` opens the session's live `claude.ai/code/session_…` URL in a new tab, and is
-  hidden while the session is stopped since there's nothing to open. `delete` confirms
-  first, then removes the session: a primary session's project, or just that one
-  worktree session.
+  `rc` toggles remote control for that session and lights up while it's on (see
+  "Remote control, or just the terminal"). `open ↗` opens the session's live
+  `claude.ai/code/session_…` URL in a new tab, and appears only when the session is
+  both running and RC-enabled, since otherwise there's nothing to open. `delete`
+  confirms first, then removes the session: a primary session's project, or just that
+  one worktree session.
 
 ![Session terminal drawer](assets/screenshots/log-drawer.png)
 
@@ -146,6 +151,66 @@ manager scaffolds the coordination worktree and drops `MULTI_AGENT.md` into the 
 session as part of the same flow.
 
 ![Add repo with multi-session enabled](assets/screenshots/add-repo-multisession.png)
+
+## Remote control, or just the terminal
+
+Every session runs Claude inside a private tmux server, which gives you two independent
+ways to reach it. Remote control is optional, and off by default on new sessions.
+
+### The interactive terminal (nothing to enable)
+
+Hit **terminal** on any session card. You get a real terminal attached to that session's
+tmux pane: type a prompt, hit Enter, press Escape to interrupt a runaway agent, arrow
+through a permission dialog. Only one terminal is open at a time.
+
+This works whether or not remote control is on, and needs no setup beyond the manager
+itself. It reaches the session from any browser that can reach this host, which means
+your own machine, plus your LAN if you set `AM_BIND`.
+
+**If you only want to drive your agents from your own machine or your home network, you
+don't need remote control at all.** Leave it off.
+
+### Remote control (reaching a session from outside your network)
+
+RC runs Claude with `--remote-control`, which registers the session with Claude's servers
+and gives it a live `claude.ai/code/session_…` URL. That URL reaches the session from
+anywhere, on your phone over cellular, without exposing this box to the internet.
+
+That is the one thing RC buys you that the terminal can't. It needs the `claude` CLI
+logged in with a full-scope token (`claude /login`).
+
+Turn it on per session:
+
+- **New project**: check **remote control** in the header before hitting **Add project**.
+- **New worktree session**: the same checkbox in **Add session**, which defaults to
+  whatever the project's primary session is using.
+- **An existing session**: hit **rc** on the session card.
+
+Toggling RC restarts the session, because systemd only reads `ExecStart` when the unit
+starts, and **a restart costs the agent its in-memory context**. The confirm dialog says
+so before it happens. Toggling a stopped session doesn't restart anything; it picks up
+the new setting on its next start.
+
+With RC on and the session running, **open ↗** appears on the card and opens that
+session's `claude.ai/code` URL in a new tab.
+
+### Where the setting lives
+
+The manager writes one systemd drop-in per session, and that file *is* the state. There's
+no mirrored copy in the manager's own JSON to disagree with it.
+
+```ini
+# ~/.config/systemd/user/claude-rc@<name>.service.d/rc.conf
+[Service]
+Environment="AM_RC_ARGS=--remote-control --remote-control-session-name-prefix <name>"
+```
+
+Turning RC off writes the same file with an empty `AM_RC_ARGS`. A session with *no*
+drop-in defaults to RC on, so sessions predating this feature keep working as they did.
+
+The quotes are load-bearing. Unquoted, systemd splits `Environment=` on whitespace and
+parses the rest as further assignments, silently truncating the value to
+`--remote-control` and dropping the session-name prefix.
 
 ## Coordination protocols and multi-session
 
@@ -184,10 +249,14 @@ Environment variables aren't propagated to sessions yet. It's planned.
 
 ## How sessions run
 
-`claude --remote-control` is an interactive command and needs a TTY. Run headless under a
-plain `Type=simple` service, it falls into `--print` mode and exits. So each session runs
-inside its own private tmux server (`tmux -L rc-<name>`), which supplies the PTY and keeps
-every session in its own cgroup. Stopping one never touches another.
+`claude` is an interactive command and needs a TTY. Run headless under a plain
+`Type=simple` service, it falls into `--print` mode, does one shot, and exits. So each
+session runs inside its own private tmux server (`tmux -L rc-<name>`), which supplies the
+PTY and keeps every session in its own cgroup. Stopping one never touches another.
+
+That private tmux server is also what the **terminal** button attaches to, over tmux
+control mode (`tmux -C attach`), so no PTY is allocated in the manager and the project
+keeps zero native dependencies.
 
 To attach and inspect a session directly:
 `tmux -L rc-<name> attach -t claude-rc-<name>` (detach with `Ctrl-b d`).
