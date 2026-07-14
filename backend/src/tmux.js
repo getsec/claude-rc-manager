@@ -32,14 +32,16 @@ export function createTmux(spawn) {
       let block = null;     // lines collected inside the current %begin..%end
       let buf = '';
 
+      // Flush any commands still awaiting a %begin/%end reply — nothing will
+      // ever reply, so resolve with an empty block (the same shape %error
+      // already produces) so callers like prime() settle instead of hanging
+      // forever. Shared by finish() (child died) and kill() (we killed it).
+      const flushPending = () => { while (pending.length) pending.shift()([]); };
+
       const finish = () => {
         if (exited) return;
         exited = true;
-        // Flush any commands still awaiting a %begin/%end reply — the child is
-        // gone, so no reply is ever coming. Resolve with an empty block (the
-        // same shape %error already produces) so callers like prime() settle
-        // instead of hanging forever.
-        while (pending.length) pending.shift()([]);
+        flushPending();
         onExit();
       };
 
@@ -108,7 +110,10 @@ export function createTmux(spawn) {
         // Marking exited before killing suppresses onExit for this teardown: the
         // caller initiated it deliberately (e.g. the socket layer killing the
         // session on socket close), so "the session exited" isn't news to them.
-        kill: () => { exited = true; child.kill(); },
+        // Still flush pending resolvers (same as finish()) — a command in
+        // flight when kill() lands must not hang forever waiting for a reply
+        // that will never come.
+        kill: () => { exited = true; flushPending(); child.kill(); },
         async prime() {
           await command(`refresh-client -C ${cols}x${rows}`);
           // Block output carries LITERAL escapes, unlike %output — no unescaping here.

@@ -153,6 +153,21 @@ test('kill() suppresses onExit for the subsequent close event', () => {
   assert.equal(fired, false);
 });
 
+test('kill() mid-command settles pending commands instead of hanging prime() forever', async () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 80, rows: 24 });
+  h.onData(() => {});
+
+  const done = h.prime();
+  // No reply blocks are ever fed — kill() tears the session down instead.
+  h.kill();
+
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('prime() did not settle after kill()')), 200);
+  });
+  await Promise.race([done, timeout]);
+});
+
 test('a command whose reply is %begin..%error resolves to an empty block', async () => {
   const { child, tmux } = harness();
   const h = tmux.attach('app', { cols: 80, rows: 24 });
