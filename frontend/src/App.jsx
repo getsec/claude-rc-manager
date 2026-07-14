@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { SessionCard } from './components/SessionCard.jsx';
 import { AddProject } from './components/AddProject.jsx';
 import { AddSession } from './components/AddSession.jsx';
-import { LogView } from './components/LogView.jsx';
+import { Terminal } from './components/Terminal.jsx';
 import { Protocols } from './components/Protocols.jsx';
 import { EnableMultiSession } from './components/EnableMultiSession.jsx';
 import { MultiAgentEditor } from './components/MultiAgentEditor.jsx';
@@ -21,6 +21,17 @@ function deriveName(url) {
   return last.replace(/\.git$/, '') || 'repo';
 }
 
+// Names exactly what a replace would destroy. `null`/undefined means the check
+// itself failed — report that as risk, never as "clean".
+function riskPhrases(c) {
+  const out = [];
+  if (c.dirtyFiles == null) out.push('an unknown number of uncommitted changes');
+  else if (c.dirtyFiles > 0) out.push(`${c.dirtyFiles} modified file${c.dirtyFiles === 1 ? '' : 's'}`);
+  if (c.localOnlyCommits == null) out.push('possible commits that are on no remote');
+  else if (c.localOnlyCommits > 0) out.push(`${c.localOnlyCommits} commit${c.localOnlyCommits === 1 ? '' : 's'} that ${c.localOnlyCommits === 1 ? "isn't" : "aren't"} on any remote`);
+  return out;
+}
+
 function cloneView(clone) {
   if (!clone) return null;
   const { name, step, status, message } = clone;
@@ -33,8 +44,11 @@ function cloneView(clone) {
     trust: `enabling claude-rc@${name} …`,
     enable: `enabling claude-rc@${name} …`,
     record: `enabling claude-rc@${name} …`,
+    'remote-control': `enabling claude-rc@${name} …`,
     coord: `scaffolding ${name}-coord …`,
     'multi-agent': 'dropping MULTI_AGENT.md …',
+    reuse: `reusing the existing checkout · enabling claude-rc@${name} …`,
+    replace: `deleted ${name} · cloning fresh …`,
     done: `enabled claude-rc@${name} · session online`,
   };
   const done = step === 'done';
@@ -44,7 +58,7 @@ function cloneView(clone) {
 export function App() {
   const { sessions, connected } = useSessions();
   const [projects, setProjects] = useState({});
-  const [logInstance, setLogInstance] = useState(null);
+  const [terminalInstance, setTerminalInstance] = useState(null);
   const [clone, setClone] = useState(null);
   const [busy, setBusy] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
@@ -67,13 +81,13 @@ export function App() {
     remove.then(refreshProjects);
   };
 
-  const startClone = async (url, opts) => {
+  const startClone = async (url, opts, onExisting) => {
     setBusy(true);
-    setClone({ step: 'derive', status: 'ok', name: deriveName(url) });
+    setClone({ step: 'derive', status: 'ok', name: deriveName(url), url, opts });
     let last = null;
     try {
-      await api.addProject(url, opts, (s) => {
-        last = { name: s.name || last?.name || deriveName(url), ...s };
+      await api.addProject(url, { ...opts, ...(onExisting ? { onExisting } : {}) }, (s) => {
+        last = { name: s.name || last?.name || deriveName(url), ...s, url, opts };
         setClone(last);
       });
     } catch (e) {
@@ -86,6 +100,15 @@ export function App() {
         setTimeout(() => setClone((c) => (c === last ? null : c)), 1600);
       }
     }
+  };
+
+  const replaceExisting = (c) => {
+    const risks = riskPhrases(c);
+    const msg = risks.length
+      ? `Delete ${c.name}? ${risks.join(' and ')} will be lost.`
+      : `Delete ${c.name} and clone it fresh?`;
+    if (!window.confirm(msg)) return;
+    startClone(c.url, c.opts, 'replace');
   };
 
   const cv = cloneView(clone);
@@ -120,6 +143,14 @@ export function App() {
         <div className={`clone-strip${cv.err ? ' err' : ''}`}>
           <span className={`spin ${cv.color}`}>{cv.spinner}</span>
           <span>{cv.label}</span>
+          {clone?.step === 'exists' && clone.exists && (
+            <span className="clone-actions">
+              {clone.sameRepo && (
+                <button className="btn-accent" onClick={() => startClone(clone.url, clone.opts, 'reuse')}>reuse it</button>
+              )}
+              <button className="ghost-btn" onClick={() => replaceExisting(clone)}>replace — deletes it</button>
+            </span>
+          )}
         </div>
       )}
 
@@ -136,17 +167,18 @@ export function App() {
               key={s.instance}
               session={s}
               worktreeLabel={owner ? s.instance.slice(owner.length + 1) : null}
-              logsOpen={logInstance === s.instance}
+              terminalOpen={terminalInstance === s.instance}
               onAction={(instance, action) => api.action(instance, action)}
-              onLogs={(instance) => setLogInstance((cur) => (cur === instance ? null : instance))}
+              onTerminal={(instance) => setTerminalInstance((cur) => (cur === instance ? null : instance))}
               onRemove={removeSessionCard}
+              onRemoteControl={(instance, enabled) => api.setRemoteControl(instance, enabled).catch(() => {})}
             />
           );
         })}
       </div>
       {sessions.length === 0 && <p className="empty">No sessions yet — add a repo to start one.</p>}
 
-      {logInstance && <LogView instance={logInstance} onClose={() => setLogInstance(null)} />}
+      {terminalInstance && <Terminal instance={terminalInstance} onClose={() => setTerminalInstance(null)} />}
 
       <div className="section-head">
         <span className="section-label">Projects</span>
@@ -187,7 +219,7 @@ export function App() {
                   Remove
                 </button>
               </div>
-              <AddSession project={name} />
+              <AddSession project={name} defaultRemoteControl={!!sessions.find((s) => s.instance === name)?.remoteControl} />
             </div>
           );
         })}

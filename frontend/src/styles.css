@@ -27,7 +27,6 @@ body {
 }
 
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.82); } }
-@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 
 .app {
   max-width: 900px;
@@ -74,7 +73,10 @@ body {
 .swatch.sel { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px currentColor; }
 
 .addbar-wrap { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
-.multi-toggle { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-dim); cursor: pointer; }
+/* Toggles sit on one row: stacked and right-aligned, each label's checkbox
+   lands at a different x and the header goes ragged. */
+.toggle-row { display: flex; align-items: center; gap: 14px; }
+.multi-toggle { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
 .protocol-pick { height: 28px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-flat); color: var(--text); font: inherit; font-size: 11px; padding: 0 8px; }
 .addbar { display: flex; align-items: stretch; gap: 8px; }
 .addbar input {
@@ -102,6 +104,7 @@ body {
   font-size: 12.5px; color: #d5dbe1;
 }
 .clone-strip.err { background: color-mix(in srgb, var(--danger) 8%, #12161b); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.clone-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .clone-strip .spin { font-weight: 700; }
 .spin.accent { color: var(--accent); }
 .spin.warn { color: var(--warn); }
@@ -150,8 +153,13 @@ body {
 .act-start:hover { background: color-mix(in srgb, var(--accent) 18%, var(--btn)); color: var(--accent); }
 .act-stop:hover  { background: color-mix(in srgb, var(--danger) 20%, var(--btn)); color: var(--danger); }
 .act-rst:hover   { background: color-mix(in srgb, var(--warn) 20%, var(--btn)); color: var(--warn); }
-.act-logs:hover  { background: color-mix(in srgb, var(--accent) 14%, var(--btn)); color: var(--accent); }
+.act-logs:hover, .act-rc:hover  { background: color-mix(in srgb, var(--accent) 14%, var(--btn)); color: var(--accent); }
 .act-logs.on { background: var(--accent-soft); color: var(--accent); }
+/* A compact toggle, not a fifth equal action: at flex:1 it stole a whole
+   share of the row and squeezed "terminal". Its .on state matches .act-logs.on
+   — border-color did nothing here, since .card-actions button sets border: 0. */
+.act-rc { flex: 0 0 auto; padding: 6px 10px; }
+.act-rc.on { background: var(--accent-soft); color: var(--accent); }
 .act-open:hover  { background: color-mix(in srgb, var(--accent) 14%, var(--btn)); color: var(--accent); }
 .act-remove:hover { background: color-mix(in srgb, var(--danger) 20%, var(--btn)); color: var(--danger); }
 .card-url-msg { margin-top: 6px; font-size: 10px; color: var(--text-faint); }
@@ -166,20 +174,20 @@ body {
 .status-pill.starting { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .status-pill.stopped { color: #8a938c; background: rgba(139, 147, 140, .12); }
 
-/* ---------- logs drawer ---------- */
-.drawer { margin-top: 16px; border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: #0a0c0f; }
-.drawer-head { display: flex; align-items: center; gap: 9px; padding: 10px 14px; background: var(--surface-flat); border-bottom: 1px solid #1c222a; }
+/* ---------- terminal overlay ---------- */
+.term-overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: #0a0c0f; }
+/* 100dvh, not 100vh: on mobile Safari/Chrome 100vh means "viewport with the
+   address bar hidden", so the bottom rows — where Claude's input box is — end
+   up under the browser chrome. */
+.term-overlay { height: 100dvh; }
+.term-bar { display: flex; align-items: center; gap: 9px; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); background: var(--surface-flat); border-bottom: 1px solid #1c222a; flex: 0 0 auto; }
 .drawer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.4s ease-in-out infinite; }
 .drawer-title { font-size: 12px; font-weight: 600; }
 .drawer-sub { font-size: 11px; color: #5a636f; }
 .drawer-close { margin-left: auto; border: 0; background: var(--btn); color: #aeb7c2; font: inherit; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
 .drawer-close:hover { color: var(--text); }
-.drawer-body { max-height: 480px; overflow: auto; padding: 12px 14px; font-size: 11.5px; line-height: 1.5; }
-.log-line { white-space: pre-wrap; word-break: break-all; color: #c2cad4; }
-.log-line.err { color: var(--danger); }
-.log-line.warn { color: var(--warn); }
-.log-cursor { color: var(--accent); }
-.log-cursor span { animation: blink 1.1s step-end infinite; }
+.term-body { flex: 1 1 auto; min-height: 0; padding: 8px 10px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+.term-body .xterm { height: 100%; }
 
 /* ---------- projects ---------- */
 .projects-list { display: flex; flex-direction: column; gap: 10px; }
@@ -197,10 +205,12 @@ body {
 .project-remove { margin-left: auto; border: 0; background: var(--btn); color: #8f98a4; font: inherit; font-size: 10.5px; font-weight: 600; padding: 4px 11px; border-radius: 7px; cursor: pointer; }
 .project-remove:hover { background: color-mix(in srgb, var(--danger) 20%, var(--btn)); color: var(--danger); }
 
-.addsession { display: flex; gap: 8px; margin-top: 12px; max-width: 360px; }
-.addsession input { flex: 1; height: 30px; border: 1px solid var(--border-strong); border-radius: 8px; background: #0e1216; color: var(--text); padding: 0 11px; font: inherit; font-size: 11px; outline: 0; }
+/* Wide enough for the branch input, the button, and the toggle without any of
+   them wrapping — at 360px the button broke onto two lines ("Add / session"). */
+.addsession { display: flex; align-items: center; gap: 10px; margin-top: 12px; max-width: 500px; }
+.addsession input { flex: 1; min-width: 0; height: 30px; border: 1px solid var(--border-strong); border-radius: 8px; background: #0e1216; color: var(--text); padding: 0 11px; font: inherit; font-size: 11px; outline: 0; }
 .addsession input:focus { border-color: var(--accent); }
-.btn-accent { height: 30px; border: 1px solid var(--accent-border); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 11px; font-weight: 600; padding: 0 12px; border-radius: 8px; cursor: pointer; }
+.btn-accent { height: 30px; flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--accent-border); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 11px; font-weight: 600; padding: 0 12px; border-radius: 8px; cursor: pointer; }
 .btn-accent:disabled { opacity: .5; cursor: not-allowed; }
 .coord-error { margin-top: 9px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--danger); }
 .session-status { margin-top: 9px; font-size: 11px; color: var(--text-dim); }

@@ -11,12 +11,15 @@ function isSafeGitUrl(url) {
 }
 
 export function createApp(deps) {
-  const { systemd, store, git, trust, coord, config, protocols, multiAgent } = deps;
+  const { systemd, store, git, trust, coord, config, protocols, multiAgent, rc, dest } = deps;
   const app = Fastify({ logger: false });
 
   async function snapshot() {
     const instances = await systemd.list();
-    return Promise.all(instances.map((i) => systemd.show(i)));
+    return Promise.all(instances.map(async (i) => ({
+      ...(await systemd.show(i)),
+      remoteControl: await rc.isEnabled(i),
+    })));
   }
 
   app.get('/api/state', async () => ({
@@ -44,17 +47,6 @@ export function createApp(deps) {
     req.raw.on('close', () => clearInterval(iv));
   });
 
-  app.get('/api/sessions/:instance/logs', (req, reply) => {
-    reply.raw.setHeader('Content-Type', 'text/event-stream');
-    reply.raw.setHeader('Cache-Control', 'no-cache');
-    reply.hijack();
-    const handle = systemd.streamPane(req.params.instance, (snapshot) => {
-      const payload = snapshot.split('\n').map((l) => `data: ${l}`).join('\n');
-      reply.raw.write(`${payload}\n\n`);
-    });
-    req.raw.on('close', () => handle.kill());
-  });
-
   app.get('/api/sessions/:instance/url', async (req) => {
     const url = await systemd.sessionUrl(req.params.instance);
     return { url };
@@ -80,6 +72,22 @@ export function createApp(deps) {
     return { branch, added, removed };
   });
 
+  app.post('/api/sessions/:instance/remote-control', async (req, reply) => {
+    const { instance } = req.params;
+    const enabled = !!(req.body && req.body.enabled);
+    try {
+      await rc.set(instance, enabled);
+    } catch (e) {
+      // The unit's config did not change, so restarting would silently
+      // re-run the old command. Leave it alone and say why.
+      return reply.code(400).send({ error: String(e.message) });
+    }
+    // ExecStart is only read at start, so RC only changes on restart.
+    const before = await systemd.show(instance);
+    if (before.activeState === 'active') await systemd.restart(instance);
+    return { ...(await systemd.show(instance)), remoteControl: enabled };
+  });
+
   const ACTIONS = new Set(['start', 'stop', 'restart']);
   app.post('/api/sessions/:instance/:action', async (req, reply) => {
     const { instance, action } = req.params;
@@ -101,20 +109,54 @@ export function createApp(deps) {
       step({ step: 'validate', status: 'fail', message: 'unsupported or unsafe git URL (expected http(s)/ssh/git URL)' });
       return reply.raw.end();
     }
-    const { multiSession, protocol, vars } = req.body || {};
+    const { multiSession, protocol, vars, remoteControl, onExisting } = req.body || {};
     try {
       const name = deriveName(req.body.url);
       step({ step: 'derive', status: 'ok', name });
-      const dest = await git.clone(req.body.url, name);
-      step({ step: 'clone', status: 'ok', dest });
-      await trust.preseed(dest);
+
+      if (await store.get(name)) {
+        step({ step: 'exists', status: 'fail', name, managed: true, message: `${name} is already a project — remove it first` });
+        return reply.raw.end();
+      }
+
+      const found = await dest.inspect(name, req.body.url);
+      let dir = null;
+      if (found.exists && !onExisting) {
+        step({ step: 'exists', status: 'fail', name, ...found, message: `${config.remoteRoot}/${name} already exists` });
+        return reply.raw.end();
+      }
+      if (found.exists && onExisting === 'reuse') {
+        if (!found.sameRepo) {
+          step({ step: 'exists', status: 'fail', name, ...found, message: `${name} is a different repo (origin ${found.remoteUrl || 'none'}) — cannot reuse` });
+          return reply.raw.end();
+        }
+        dir = found.dir;
+        step({ step: 'reuse', status: 'ok', dest: dir });
+      } else if (found.exists && onExisting === 'replace') {
+        // Deleting the main checkout would break every worktree hanging off it.
+        const extras = (await systemd.list()).filter((i) => i.startsWith(`${name}-`));
+        if (extras.length) {
+          step({ step: 'exists', status: 'fail', name, message: `remove worktree sessions first: ${extras.join(', ')}` });
+          return reply.raw.end();
+        }
+        await dest.remove(name);
+        step({ step: 'replace', status: 'ok' });
+      }
+
+      if (!dir) {
+        dir = await git.clone(req.body.url, name);
+        step({ step: 'clone', status: 'ok', dest: dir });
+      }
+      await trust.preseed(dir);
       step({ step: 'trust', status: 'ok' });
+      await rc.set(name, !!remoteControl);
+      step({ step: 'remote-control', status: 'ok', enabled: !!remoteControl });
       await systemd.enableNow(name);
       step({ step: 'enable', status: 'ok' });
       await store.setProject(name, { url: req.body.url });
       step({ step: 'record', status: 'ok' });
       if (multiSession) {
-        const branch = await git.currentBranch(dest);
+        const branch = await git.currentBranch(dir);
         const date = new Date().toISOString().slice(0, 10);
         await coord.scaffold(name, { primaryWorktree: name, primaryBranch: branch, date });
         step({ step: 'coord', status: 'ok' });
@@ -123,7 +165,7 @@ export function createApp(deps) {
         }
         const proto = await protocols.get(protocol);
         const rendered = render(proto.body, { PROJECT: name, COORD_DIR: `../${name}-coord`, ...proto.vars, ...(vars || {}) });
-        await multiAgent.drop(dest, rendered);
+        await multiAgent.drop(dir, rendered);
         step({ step: 'multi-agent', status: 'ok' });
         await store.setProject(name, { multiSession: true, protocol, vars: vars || {}, multiAgentMd: rendered });
       }
@@ -251,6 +293,8 @@ export function createApp(deps) {
       const date = new Date().toISOString().slice(0, 10);
       await coord.addSessionRow(name, { worktree, branch, date });
       step({ step: 'coord-row', status: 'ok' });
+      await rc.set(worktree, !!(req.body && req.body.remoteControl));
+      step({ step: 'remote-control', status: 'ok', enabled: !!(req.body && req.body.remoteControl) });
       await systemd.enableNow(worktree);
       step({ step: 'enable', status: 'ok' });
       step({ step: 'done', status: 'ok', worktree });

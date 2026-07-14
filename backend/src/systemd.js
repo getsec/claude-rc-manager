@@ -46,25 +46,6 @@ export function createSystemd(run) {
       if (scrollback) args.push('-S', `-${scrollback}`);
       return run('tmux', args);
     },
-    streamPane(instance, onSnapshot, intervalMs = 1000) {
-      let stopped = false;
-      let last = null;
-      const capturePane = this.capturePane;
-      const tick = async () => {
-        const r = await capturePane(instance, { scrollback: 1000 });
-        if (stopped || r.code !== 0) return;
-        const lines = r.stdout.split('\n');
-        while (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-        const trimmed = lines.join('\n');
-        if (trimmed !== last) {
-          last = trimmed;
-          onSnapshot(trimmed);
-        }
-      };
-      tick();
-      const timer = setInterval(tick, intervalMs);
-      return { kill: () => { stopped = true; clearInterval(timer); } };
-    },
     async sessionUrl(instance) {
       const r = await this.capturePane(instance);
       if (r.code !== 0) return null;

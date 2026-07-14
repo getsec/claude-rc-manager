@@ -75,3 +75,36 @@ test('diffStat is zero/zero when there is no diff at all', async () => {
   const git = createGit(run, { root: '/repos' });
   assert.deepEqual(await git.diffStat('/repos/y-detect', 'main'), { added: 0, removed: 0 });
 });
+
+test('dirtyCount counts porcelain lines', async () => {
+  const calls = [];
+  const g = createGit(async (cmd, args) => {
+    calls.push(args.join(' '));
+    return { code: 0, stdout: ' M src/a.js\n?? new.txt\n', stderr: '' };
+  }, { root: '/repos' });
+  assert.equal(await g.dirtyCount('/repos/foo'), 2);
+  assert.ok(calls.includes('-C /repos/foo status --porcelain --untracked-files=all'));
+});
+
+test('dirtyCount is 0 for a clean tree', async () => {
+  const g = createGit(async () => ({ code: 0, stdout: '', stderr: '' }), { root: '/repos' });
+  assert.equal(await g.dirtyCount('/repos/foo'), 0);
+});
+
+test('localOnlyCount counts commits that are on no remote, across all branches', async () => {
+  const calls = [];
+  const g = createGit(async (cmd, args) => {
+    calls.push(args.join(' '));
+    return { code: 0, stdout: 'abc\ndef\n', stderr: '' };
+  }, { root: '/repos' });
+  assert.equal(await g.localOnlyCount('/repos/foo'), 2);
+  // --branches (not HEAD): work stranded on a branch you are not standing on
+  // is exactly what a replace would destroy irrecoverably.
+  assert.ok(calls.includes('-C /repos/foo log --branches --not --remotes --format=%H'));
+});
+
+test('both counts reject rather than reporting a false zero when git fails', async () => {
+  const g = createGit(async () => ({ code: 128, stdout: '', stderr: 'not a git repository' }), { root: '/repos' });
+  await assert.rejects(() => g.dirtyCount('/repos/foo'), /not a git repository/);
+  await assert.rejects(() => g.localOnlyCount('/repos/foo'), /not a git repository/);
+});

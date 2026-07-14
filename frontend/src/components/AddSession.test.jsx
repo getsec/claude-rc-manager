@@ -4,7 +4,7 @@ import { AddSession } from './AddSession.jsx';
 import { api } from '../api.js';
 
 test('shows an enable-multi-session picker when the backend blocks on missing coord', async () => {
-  vi.spyOn(api, 'addSession').mockImplementation(async (project, branch, onStep) => {
+  vi.spyOn(api, 'addSession').mockImplementation(async (project, branch, remoteControl, onStep) => {
     onStep({ step: 'coord', status: 'fail', message: 'no foo-coord exists; create it before adding a session' });
   });
   vi.spyOn(api, 'listProtocols').mockResolvedValue([{ slug: 'compose-portblock', name: 'Compose port-block' }]);
@@ -16,7 +16,7 @@ test('shows an enable-multi-session picker when the backend blocks on missing co
 
 test('enabling multi-session retries adding the session', async () => {
   let calls = 0;
-  vi.spyOn(api, 'addSession').mockImplementation(async (project, branch, onStep) => {
+  vi.spyOn(api, 'addSession').mockImplementation(async (project, branch, remoteControl, onStep) => {
     calls += 1;
     if (calls === 1) onStep({ step: 'coord', status: 'fail', message: 'blocked' });
     else onStep({ step: 'done', status: 'ok' });

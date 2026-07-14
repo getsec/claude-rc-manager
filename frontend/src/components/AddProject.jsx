@@ -6,6 +6,7 @@ export function AddProject({ onSubmit, busy }) {
   const [url, setUrl] = useState('');
   const [multiSession, setMultiSession] = useState(false);
   const [protocol, setProtocol] = useState('');
+  const [remoteControl, setRemoteControl] = useState(false);
   const [protocols, setProtocols] = useState([]);
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export function AddProject({ onSubmit, busy }) {
     const v = url.trim();
     if (!v || busy) return;
     if (multiSession && !protocol) return;
-    onSubmit(v, multiSession ? { multiSession: true, protocol } : {});
+    onSubmit(v, { remoteControl, ...(multiSession ? { multiSession: true, protocol } : {}) });
     setUrl('');
   };
 
@@ -36,10 +37,16 @@ export function AddProject({ onSubmit, busy }) {
         />
         <button className="btn-primary" disabled={busy || !url.trim() || (multiSession && !protocol)} onClick={go}>Add project</button>
       </div>
-      <label className="multi-toggle">
-        <input type="checkbox" checked={multiSession} onChange={(e) => setMultiSession(e.target.checked)} />
-        multi-session
-      </label>
+      <div className="toggle-row">
+        <label className="multi-toggle">
+          <input type="checkbox" checked={multiSession} onChange={(e) => setMultiSession(e.target.checked)} />
+          multi-session
+        </label>
+        <label className="multi-toggle">
+          <input type="checkbox" checked={remoteControl} onChange={(e) => setRemoteControl(e.target.checked)} />
+          remote control
+        </label>
+      </div>
       {multiSession && (
         <select className="protocol-pick" value={protocol} onChange={(e) => setProtocol(e.target.value)}>
           {protocols.length === 0 && <option value="">loading…</option>}

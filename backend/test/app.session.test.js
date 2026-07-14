@@ -25,12 +25,13 @@ test('creates worktree session when coord exists', async () => {
     git: { worktreeAdd: async (m, w, b) => calls.push(`wt ${m} ${w} ${b}`) },
     trust: { preseed: async (p) => calls.push(`trust ${p}`) },
     systemd: { enableNow: async (i) => calls.push(`enable ${i}`) },
+    rc: { set: async () => {}, isEnabled: async () => true },
     store: { get: async () => null },
     config: { remoteRoot: '/repos' },
   });
   const res = await app.inject({ method: 'POST', url: '/api/projects/foo/sessions', payload: { branch: 'feat/Detection Advisor' } });
   const steps = ndjson(res.body).map((s) => s.step);
-  assert.deepEqual(steps, ['worktree', 'trust', 'coord-row', 'enable', 'done']);
+  assert.deepEqual(steps, ['worktree', 'trust', 'coord-row', 'remote-control', 'enable', 'done']);
   assert.ok(calls.includes('wt /repos/foo /repos/foo-feat-detection-advisor feat/Detection Advisor'));
   assert.ok(calls.includes('trust /repos/foo-feat-detection-advisor'));
   assert.ok(calls.includes('enable foo-feat-detection-advisor'));
@@ -43,13 +44,14 @@ test('drops MULTI_AGENT.md into the new worktree when the project is multi-sessi
     git: { worktreeAdd: async () => calls.push('wt') },
     trust: { preseed: async () => calls.push('trust') },
     systemd: { enableNow: async () => calls.push('enable') },
+    rc: { set: async () => {}, isEnabled: async () => true },
     store: { get: async () => ({ multiAgentMd: '# hi' }) },
     multiAgent: { drop: async (dir, md) => calls.push(`drop ${dir} ${md}`) },
     config: { remoteRoot: '/repos' },
   });
   const res = await app.inject({ method: 'POST', url: '/api/projects/foo/sessions', payload: { branch: 'feat/x' } });
   const steps = ndjson(res.body).map((s) => s.step);
-  assert.deepEqual(steps, ['worktree', 'trust', 'multi-agent', 'coord-row', 'enable', 'done']);
+  assert.deepEqual(steps, ['worktree', 'trust', 'multi-agent', 'coord-row', 'remote-control', 'enable', 'done']);
   assert.ok(calls.includes('drop /repos/foo-feat-x # hi'));
 });
 

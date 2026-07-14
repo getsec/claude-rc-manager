@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 import { buildDeps } from './deps.js';
 import { config } from './config.js';
 import { seedDefaults } from './protocols.js';
+import { attachTerminal } from './terminal.js';
 
 const deps = buildDeps();
 const app = createApp(deps);
@@ -13,6 +14,7 @@ await app.ready();
 
 for (const host of config.bindHosts) {
   const server = http.createServer((req, res) => app.routing(req, res));
+  attachTerminal(server, deps);
   server.on('error', (err) => {
     console.error(`agent-manager: failed to bind http://${host}:${config.port}: ${err.message}`);
   });

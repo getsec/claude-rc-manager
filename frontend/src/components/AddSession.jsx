@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
-export function AddSession({ project }) {
+export function AddSession({ project, defaultRemoteControl = false }) {
   const [branch, setBranch] = useState('');
   const [status, setStatus] = useState(null); // { kind: 'error'|'progress'|'coord', message }
   const [busy, setBusy] = useState(false);
   const [protocols, setProtocols] = useState([]);
   const [protocol, setProtocol] = useState('');
+  const [remoteControl, setRemoteControl] = useState(defaultRemoteControl);
 
   useEffect(() => {
     if (status?.kind === 'coord' && protocols.length === 0) {
@@ -21,7 +22,7 @@ export function AddSession({ project }) {
     setStatus(null);
     let last = null;
     try {
-      await api.addSession(project, b, (s) => {
+      await api.addSession(project, b, remoteControl, (s) => {
         last = s;
         if (s.status === 'fail') {
           setStatus(s.step === 'coord' ? { kind: 'coord', message: s.message } : { kind: 'error', message: s.message });
@@ -71,6 +72,10 @@ export function AddSession({ project }) {
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
         />
         <button className="btn-accent" disabled={busy || !branch.trim()} onClick={submit}>Add session</button>
+        <label className="multi-toggle">
+          <input type="checkbox" checked={remoteControl} onChange={(e) => setRemoteControl(e.target.checked)} />
+          remote control
+        </label>
       </div>
       {status?.kind === 'error' && (
         <div className="coord-error"><span>✕</span><span>{status.message}</span></div>
