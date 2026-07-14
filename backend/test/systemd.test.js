@@ -67,21 +67,3 @@ test('capturePane only adds the -S scrollback flag when requested', async () => 
   assert.ok(calls.includes('tmux -L rc-app capture-pane -p -t claude-rc-app'));
   assert.ok(calls.includes('tmux -L rc-app capture-pane -p -t claude-rc-app -S -500'));
 });
-
-test('streamPane emits trimmed pane snapshots, dedupes unchanged frames, and stops after kill', async () => {
-  const frames = ['a\nb\n\n\n', 'a\nb\nc\n\n', 'a\nb\nc\n\n'];
-  let n = 0;
-  const run = async () => ({ code: 0, stdout: frames[Math.min(n++, frames.length - 1)], stderr: '' });
-  const sd = createSystemd(run);
-  const seen = [];
-  const handle = sd.streamPane('app', (s) => seen.push(s), 15);
-  await new Promise((r) => setTimeout(r, 70));
-  handle.kill();
-  const countAtKill = seen.length;
-  await new Promise((r) => setTimeout(r, 40));
-
-  assert.equal(seen.length, countAtKill, 'no snapshots emitted after kill()');
-  assert.deepEqual(seen[0], 'a\nb', 'trailing blank pane rows are trimmed');
-  assert.ok(seen.includes('a\nb\nc'), 'emits again once the pane content changes');
-  assert.equal(seen.filter((s) => s === 'a\nb\nc').length, 1, 'repeated identical frames are not re-emitted');
-});

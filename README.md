@@ -54,6 +54,10 @@ printf '[Service]\nEnvironment=AM_BIND=127.0.0.1,192.168.1.50\n' \
 systemctl --user daemon-reload && systemctl --user restart agent-manager
 ```
 
+**A session terminal is a real keyboard into that session.** There is no auth, so
+anyone who can reach this port can type into every running Claude session — and
+those sessions run commands. Only bind to a network you trust.
+
 If a LAN machine times out reaching it, the app is almost never the cause (a wrong
 bind gives "connection refused," not a timeout) — check your Wi-Fi AP's **client/AP
 isolation** setting and that both machines are on the same subnet.

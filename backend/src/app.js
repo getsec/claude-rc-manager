@@ -44,17 +44,6 @@ export function createApp(deps) {
     req.raw.on('close', () => clearInterval(iv));
   });
 
-  app.get('/api/sessions/:instance/logs', (req, reply) => {
-    reply.raw.setHeader('Content-Type', 'text/event-stream');
-    reply.raw.setHeader('Cache-Control', 'no-cache');
-    reply.hijack();
-    const handle = systemd.streamPane(req.params.instance, (snapshot) => {
-      const payload = snapshot.split('\n').map((l) => `data: ${l}`).join('\n');
-      reply.raw.write(`${payload}\n\n`);
-    });
-    req.raw.on('close', () => handle.kill());
-  });
-
   app.get('/api/sessions/:instance/url', async (req) => {
     const url = await systemd.sessionUrl(req.params.instance);
     return { url };
