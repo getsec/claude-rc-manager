@@ -106,7 +106,17 @@ export function createTmux(spawn) {
           if (!b.length) return;
           send(`send-keys -t ${session} -H ${b.toString('hex').match(/../g).join(' ')}`);
         },
-        resize: (c, r) => send(`refresh-client -C ${c}x${r}`),
+        // tmux.js is the only module that knows the control protocol, so it
+        // must not trust its caller: refuse to emit anything unless both
+        // dimensions are positive integers within a sane bound. Control mode
+        // is line-oriented on the child's stdin, so an unchecked value could
+        // smuggle a second arbitrary command in via an embedded newline
+        // (e.g. "1\nrun-shell ..."). Reject outright — never clamp.
+        resize: (c, r) => {
+          const safe = (v) => Number.isInteger(v) && v > 0 && v <= 1000;
+          if (!safe(c) || !safe(r)) return;
+          send(`refresh-client -C ${c}x${r}`);
+        },
         // Marking exited before killing suppresses onExit for this teardown: the
         // caller initiated it deliberately (e.g. the socket layer killing the
         // session on socket close), so "the session exited" isn't news to them.

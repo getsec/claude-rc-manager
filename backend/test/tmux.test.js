@@ -84,6 +84,28 @@ test('resize() emits refresh-client', () => {
   assert.ok(sent(child).includes('refresh-client -C 90x24'));
 });
 
+test('resize() refuses to emit when a dimension smuggles a second tmux command via newline', () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 80, rows: 24 });
+  // A JSON string may legally contain a newline; control mode is line-
+  // oriented on the child's stdin, so an unvalidated value here would let a
+  // caller append an arbitrary second command (e.g. run-shell).
+  h.resize("1\nrun-shell 'touch /tmp/pwned'", 1);
+  assert.deepEqual(child.written, []);
+});
+
+test('resize() refuses non-integer, non-positive, and out-of-range dimensions', () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 80, rows: 24 });
+  h.resize(0, 24);
+  h.resize(-5, 24);
+  h.resize(1.5, 24);
+  h.resize(1001, 24);       // past the sane upper bound
+  h.resize(90, Infinity);
+  h.resize(90, NaN);
+  assert.deepEqual(child.written, []);
+});
+
 test('prime() sizes the client, paints the captured screen, and places the cursor', async () => {
   const { child, tmux } = harness();
   const h = tmux.attach('app', { cols: 90, rows: 30 });
