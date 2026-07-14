@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { sessionView } from '../display.js';
 import { api } from '../api.js';
 
-export function SessionCard({ session, worktreeLabel, logsOpen, onAction, onLogs, onRemove }) {
+export function SessionCard({ session, worktreeLabel, terminalOpen, onAction, onTerminal, onRemove }) {
   const name = session.instance;
   const [urlMsg, setUrlMsg] = useState(null);
   const [git, setGit] = useState({ branch: null, added: 0, removed: 0 });
@@ -61,7 +61,7 @@ export function SessionCard({ session, worktreeLabel, logsOpen, onAction, onLogs
           <button className="act-start" onClick={() => onAction(name, 'start')}>start</button>
           <button className="act-stop" onClick={() => onAction(name, 'stop')}>stop</button>
           <button className="act-rst" onClick={() => onAction(name, 'restart')}>rst</button>
-          <button className={`act-logs${logsOpen ? ' on' : ''}`} onClick={() => onLogs(name)}>logs</button>
+          <button className={`act-logs${terminalOpen ? ' on' : ''}`} onClick={() => onTerminal(name)}>terminal</button>
         </div>
         <div className="card-actions">
           {v.state !== 'stopped' && <button className="act-open" onClick={openSession}>open ↗</button>}

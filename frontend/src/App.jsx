@@ -44,7 +44,7 @@ function cloneView(clone) {
 export function App() {
   const { sessions, connected } = useSessions();
   const [projects, setProjects] = useState({});
-  const [logInstance, setLogInstance] = useState(null);
+  const [terminalInstance, setTerminalInstance] = useState(null);
   const [clone, setClone] = useState(null);
   const [busy, setBusy] = useState(false);
   const [accent, setAccent] = useState(loadAccent);
@@ -136,9 +136,9 @@ export function App() {
               key={s.instance}
               session={s}
               worktreeLabel={owner ? s.instance.slice(owner.length + 1) : null}
-              logsOpen={logInstance === s.instance}
+              terminalOpen={terminalInstance === s.instance}
               onAction={(instance, action) => api.action(instance, action)}
-              onLogs={(instance) => setLogInstance((cur) => (cur === instance ? null : instance))}
+              onTerminal={(instance) => setTerminalInstance((cur) => (cur === instance ? null : instance))}
               onRemove={removeSessionCard}
             />
           );
@@ -146,7 +146,7 @@ export function App() {
       </div>
       {sessions.length === 0 && <p className="empty">No sessions yet — add a repo to start one.</p>}
 
-      {logInstance && <Terminal instance={logInstance} onClose={() => setLogInstance(null)} />}
+      {terminalInstance && <Terminal instance={terminalInstance} onClose={() => setTerminalInstance(null)} />}
 
       <div className="section-head">
         <span className="section-label">Projects</span>

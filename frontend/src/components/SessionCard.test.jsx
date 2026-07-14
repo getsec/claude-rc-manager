@@ -17,13 +17,13 @@ async function settle() {
 }
 
 test('does not render the open button for an inactive/dead session', async () => {
-  render(<SessionCard session={session('inactive', 'dead')} onAction={() => {}} onLogs={() => {}} onRemove={() => {}} />);
+  render(<SessionCard session={session('inactive', 'dead')} onAction={() => {}} onTerminal={() => {}} onRemove={() => {}} />);
   await settle();
   expect(screen.queryByText('open ↗')).toBeNull();
 });
 
 test('renders the open button for a running session', async () => {
-  render(<SessionCard session={session('active')} onAction={() => {}} onLogs={() => {}} onRemove={() => {}} />);
+  render(<SessionCard session={session('active')} onAction={() => {}} onTerminal={() => {}} onRemove={() => {}} />);
   await settle();
   expect(screen.getByText('open ↗')).toBeTruthy();
 });
@@ -31,7 +31,7 @@ test('renders the open button for a running session', async () => {
 test('delete button confirms before calling onRemove', async () => {
   const onRemove = vi.fn();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
-  render(<SessionCard session={session('active')} onAction={() => {}} onLogs={() => {}} onRemove={onRemove} />);
+  render(<SessionCard session={session('active')} onAction={() => {}} onTerminal={() => {}} onRemove={onRemove} />);
   await settle();
   fireEvent.click(screen.getByText('delete'));
   expect(onRemove).toHaveBeenCalledWith('app');
@@ -40,7 +40,7 @@ test('delete button confirms before calling onRemove', async () => {
 test('delete button does nothing when confirm is cancelled', async () => {
   const onRemove = vi.fn();
   vi.spyOn(window, 'confirm').mockReturnValue(false);
-  render(<SessionCard session={session('active')} onAction={() => {}} onLogs={() => {}} onRemove={onRemove} />);
+  render(<SessionCard session={session('active')} onAction={() => {}} onTerminal={() => {}} onRemove={onRemove} />);
   await settle();
   fireEvent.click(screen.getByText('delete'));
   expect(onRemove).not.toHaveBeenCalled();
@@ -48,7 +48,7 @@ test('delete button does nothing when confirm is cancelled', async () => {
 
 test('renders the branch and diff stat once loaded', async () => {
   api.sessionGit.mockResolvedValue({ branch: 'feat/detect', added: 42, removed: 7 });
-  render(<SessionCard session={session('active')} onAction={() => {}} onLogs={() => {}} onRemove={() => {}} />);
+  render(<SessionCard session={session('active')} onAction={() => {}} onTerminal={() => {}} onRemove={() => {}} />);
   await waitFor(() => expect(screen.getByText('⎇ feat/detect')).toBeTruthy());
   expect(screen.getByText('+42')).toBeTruthy();
   expect(screen.getByText('-7')).toBeTruthy();
@@ -56,7 +56,7 @@ test('renders the branch and diff stat once loaded', async () => {
 
 test('omits the diff stat when there are no changes', async () => {
   api.sessionGit.mockResolvedValue({ branch: 'main', added: 0, removed: 0 });
-  render(<SessionCard session={session('active')} onAction={() => {}} onLogs={() => {}} onRemove={() => {}} />);
+  render(<SessionCard session={session('active')} onAction={() => {}} onTerminal={() => {}} onRemove={() => {}} />);
   await waitFor(() => expect(screen.getByText('⎇ main')).toBeTruthy());
   expect(screen.queryByText('+0')).toBeNull();
 });
