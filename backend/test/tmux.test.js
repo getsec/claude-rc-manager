@@ -33,6 +33,13 @@ const sent = (child) => child.written.map((s) => s.trim());
 // cannot reply before it has been asked.
 const tick = () => new Promise((r) => setImmediate(r));
 
+// `tmux -C attach` always emits one unsolicited %begin..%end block for the
+// attach itself before replying to anything the client sends — real tmux
+// verified end-to-end. Every test that goes on to exercise command()/write()/
+// resize() must feed this first, or it isn't modeling real tmux.
+const PHANTOM = '%begin 1784040484 392\n%end 1784040484 392\n%session-changed $0 x\n';
+const feedPhantom = (child) => feed(child, PHANTOM);
+
 test('unescapeOutput decodes octal escapes and literal backslashes byte-exactly', () => {
   assert.equal(unescapeOutput('\\033[31mhi').toString('latin1'), '\x1b[31mhi');
   assert.equal(unescapeOutput('a\\\\b').toString('latin1'), 'a\\b');
@@ -59,6 +66,8 @@ test('%begin/%end block contents never leak into pane data', () => {
   const h = tmux.attach('app', { cols: 80, rows: 24 });
   const seen = [];
   h.onData((b) => seen.push(b.toString('latin1')));
+  // Nothing has been sent yet, so this block is treated as the phantom attach
+  // reply (discarded) regardless of its contents — same as real tmux.
   feed(child, '%begin 123 1 1\nnot pane data\n%end 123 1 1\n%output %0 real\n');
   assert.deepEqual(seen, ['real']);
 });
@@ -66,6 +75,7 @@ test('%begin/%end block contents never leak into pane data', () => {
 test('write() emits hex-encoded send-keys', () => {
   const { child, tmux } = harness();
   const h = tmux.attach('app', { cols: 80, rows: 24 });
+  feedPhantom(child);
   h.write(Buffer.from('hi\r'));
   assert.ok(sent(child).includes('send-keys -t claude-rc-app -H 68 69 0d'));
 });
@@ -73,6 +83,7 @@ test('write() emits hex-encoded send-keys', () => {
 test('write() ignores empty input rather than emitting a bare send-keys', () => {
   const { child, tmux } = harness();
   const h = tmux.attach('app', { cols: 80, rows: 24 });
+  feedPhantom(child);
   h.write(Buffer.from(''));
   assert.deepEqual(sent(child).filter((s) => s.startsWith('send-keys')), []);
 });
@@ -80,8 +91,22 @@ test('write() ignores empty input rather than emitting a bare send-keys', () => 
 test('resize() emits refresh-client', () => {
   const { child, tmux } = harness();
   const h = tmux.attach('app', { cols: 80, rows: 24 });
+  feedPhantom(child);
   h.resize(90, 24);
   assert.ok(sent(child).includes('refresh-client -C 90x24'));
+});
+
+test('write() and resize() before the phantom block queue rather than write immediately', () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 80, rows: 24 });
+  h.write(Buffer.from('hi'));
+  h.resize(90, 24);
+  assert.deepEqual(child.written, []);
+  feedPhantom(child);
+  assert.deepEqual(sent(child), [
+    'send-keys -t claude-rc-app -H 68 69',
+    'refresh-client -C 90x24',
+  ]);
 });
 
 test('resize() refuses to emit when a dimension smuggles a second tmux command via newline', () => {
@@ -106,13 +131,22 @@ test('resize() refuses non-integer, non-positive, and out-of-range dimensions', 
   assert.deepEqual(child.written, []);
 });
 
-test('prime() sizes the client, paints the captured screen, and places the cursor', async () => {
+test('prime() paints the real screen when the phantom block arrives after prime() was called', async () => {
   const { child, tmux } = harness();
   const h = tmux.attach('app', { cols: 90, rows: 30 });
   const seen = [];
   h.onData((b) => seen.push(b.toString('latin1')));
 
+  // The exact failing race: prime() is called — and so wants to write
+  // refresh-client — before tmux's own unsolicited attach reply has arrived.
+  // If that phantom block were allowed to resolve prime()'s first resolver
+  // (the bug), everything downstream would shift one slot early and the
+  // screen capture would never reach `seen`.
   const done = h.prime();
+  assert.deepEqual(child.written, [], 'nothing may be written before the phantom block is consumed');
+
+  feedPhantom(child);
+  await tick();
   // Each command resolves on its own %begin..%end block, in order. Yield between
   // blocks so prime() gets to send the next command first.
   feed(child, '%begin 1 1 1\n%end 1 1 1\n');                       // refresh-client
@@ -128,6 +162,63 @@ test('prime() sizes the client, paints the captured screen, and places the curso
   // The format MUST be quoted — unquoted, '#' starts a tmux comment.
   assert.ok(cmds.includes('display-message -p -t claude-rc-app "#{cursor_y},#{cursor_x}"'));
   // Clear + home, screen joined with CRLF, then cursor to 1-based (row 6, col 8).
+  // A corrupted correlation (phantom stealing refresh-client's slot) would
+  // paint an empty screen here instead.
+  assert.equal(seen.join(''), '\x1b[H\x1b[2Jline one\r\nline two\x1b[6;8H');
+});
+
+test('nothing is written to stdin before the phantom attach block is consumed', async () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 80, rows: 24 });
+  h.onData(() => {});
+
+  h.write(Buffer.from('a'));
+  h.resize(100, 40);
+  const primed = h.prime();
+  assert.deepEqual(child.written, []);
+
+  feedPhantom(child);
+  await tick();
+
+  // Queued commands flush in the order they were asked for, once — and only
+  // once — the phantom block has been consumed.
+  assert.deepEqual(sent(child), [
+    'send-keys -t claude-rc-app -H 61',
+    'refresh-client -C 100x40',
+    'refresh-client -C 80x24',
+  ]);
+
+  h.kill(); // settle prime()'s still-outstanding commands instead of feeding more blocks
+  await primed;
+});
+
+test("a write() issued while prime() is in flight does not corrupt prime()'s result", async () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 90, rows: 30 });
+  const seen = [];
+  h.onData((b) => seen.push(b.toString('latin1')));
+
+  feedPhantom(child);
+  await tick();
+
+  const done = h.prime();
+  await tick(); // refresh-client has been written and is awaiting its reply
+
+  // A keystroke arrives mid-prime(). Its send-keys reply block must resolve
+  // its own (no-op) resolver, not steal capture-pane's or display-message's.
+  h.write(Buffer.from('x'));
+  await tick();
+
+  feed(child, '%begin 1 1 1\n%end 1 1 1\n');                       // refresh-client's reply
+  await tick();
+  feed(child, '%begin 2 2 1\n%end 2 2 1\n');                       // send-keys's reply (no-op)
+  await tick();
+  feed(child, '%begin 3 3 1\nline one\nline two\n%end 3 3 1\n');   // capture-pane
+  await tick();
+  feed(child, '%begin 4 4 1\n5,7\n%end 4 4 1\n');                  // display-message
+  await done;
+
+  assert.ok(sent(child).includes('send-keys -t claude-rc-app -H 78'));
   assert.equal(seen.join(''), '\x1b[H\x1b[2Jline one\r\nline two\x1b[6;8H');
 });
 
@@ -175,13 +266,15 @@ test('kill() suppresses onExit for the subsequent close event', () => {
   assert.equal(fired, false);
 });
 
-test('kill() mid-command settles pending commands instead of hanging prime() forever', async () => {
+test('kill() before the phantom block arrives settles queued commands instead of hanging prime() forever', async () => {
   const { child, tmux } = harness();
   const h = tmux.attach('app', { cols: 80, rows: 24 });
   h.onData(() => {});
 
   const done = h.prime();
-  // No reply blocks are ever fed — kill() tears the session down instead.
+  // The phantom block never arrives, and nothing has been written yet — the
+  // command is still sitting in the queue, not pending. kill() must still
+  // settle it.
   h.kill();
 
   const timeout = new Promise((_, reject) => {
@@ -197,6 +290,8 @@ test('a command whose reply is %begin..%error resolves to an empty block', async
   h.onData((b) => seen.push(b.toString('latin1')));
 
   const done = h.prime();
+  feedPhantom(child);
+  await tick();
   feed(child, '%begin 1 1 1\n%end 1 1 1\n');           // refresh-client
   await tick();
   feed(child, '%begin 2 2 1\n%error 2 2 1\n');          // capture-pane fails
@@ -209,13 +304,14 @@ test('a command whose reply is %begin..%error resolves to an empty block', async
   assert.equal(seen.join(''), '\x1b[H\x1b[2J\x1b[1;1H');
 });
 
-test('the child dying mid-command settles pending commands instead of hanging prime() forever', async () => {
+test('the child dying before the phantom block arrives settles queued commands instead of hanging prime() forever', async () => {
   const { child, tmux } = harness();
   const h = tmux.attach('app', { cols: 80, rows: 24 });
   h.onData(() => {});
 
   const done = h.prime();
-  // No reply blocks are ever fed — the child just dies.
+  // No phantom block, no reply blocks — the child just dies while the
+  // command is still queued, not pending.
   child.emit('close');
 
   const timeout = new Promise((_, reject) => {

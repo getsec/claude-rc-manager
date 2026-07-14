@@ -28,15 +28,28 @@ export function createTmux(spawn) {
       let onData = () => {};
       let onExit = () => {};
       let exited = false;
-      const pending = [];   // resolvers for in-flight commands, FIFO
+      // `tmux -C attach` always emits one unsolicited %begin..%end block for
+      // the attach itself, before replying to anything we send. If we wrote
+      // commands immediately, that phantom block would resolve the *first*
+      // queued resolver, shifting every later reply one slot early. So nothing
+      // is written to stdin until the phantom block has been seen and
+      // discarded — everything asked of us before then waits in `queued`.
+      let phantomSeen = false;
+      const queued = [];    // {line, resolve} not yet written — waiting on the phantom block
+      const pending = [];   // resolvers already written and awaiting their reply, FIFO
       let block = null;     // lines collected inside the current %begin..%end
       let buf = '';
 
-      // Flush any commands still awaiting a %begin/%end reply — nothing will
-      // ever reply, so resolve with an empty block (the same shape %error
-      // already produces) so callers like prime() settle instead of hanging
-      // forever. Shared by finish() (child died) and kill() (we killed it).
-      const flushPending = () => { while (pending.length) pending.shift()([]); };
+      // Flush everything that will never get a real reply — queued commands
+      // never even reached stdin, and pending ones were written but nothing
+      // will answer them now. Resolve both with an empty block (the same
+      // shape %error already produces) so callers like prime() settle instead
+      // of hanging forever. Shared by finish() (child died) and kill() (we
+      // killed it) — either can land before the phantom block ever arrives.
+      const flushPending = () => {
+        while (queued.length) queued.shift().resolve([]);
+        while (pending.length) pending.shift()([]);
+      };
 
       const finish = () => {
         if (exited) return;
@@ -45,12 +58,16 @@ export function createTmux(spawn) {
         onExit();
       };
 
-      const send = (line) => {
+      const writeLine = (line) => {
         try { child.stdin.write(`${line}\n`); } catch { /* child already gone */ }
       };
 
-      // tmux answers every command with a %begin..%end block, in order.
-      const command = (line) => new Promise((resolve) => {
+      // tmux answers every line we write with exactly one %begin..%end block,
+      // in order — so every write must enqueue exactly one resolver, whether
+      // or not the caller cares about the reply. This is the single path all
+      // commands go through (including fire-and-forget ones) so the FIFO can
+      // never drift out of correlation with the reply stream.
+      const enqueue = (line, resolve) => {
         // The child is already gone — nothing will ever reply, so don't queue
         // a resolver finish() will never get another chance to flush. This
         // matters for sequential callers like prime(): finish() only flushes
@@ -58,15 +75,40 @@ export function createTmux(spawn) {
         // after death (e.g. prime()'s next `await command(...)`) must settle
         // immediately too, or they'd hang forever.
         if (exited) { resolve([]); return; }
+        if (!phantomSeen) { queued.push({ line, resolve }); return; }
         pending.push(resolve);
-        send(line);
-      });
+        writeLine(line);
+      };
+
+      // Callers that want the reply.
+      const command = (line) => new Promise((resolve) => enqueue(line, resolve));
+      // Fire-and-forget callers (write/resize) still get exactly one resolver
+      // enqueued — it's just a no-op — so their reply block cannot be
+      // mistaken for anyone else's.
+      const send = (line) => enqueue(line, () => {});
+
+      // Once the phantom block is consumed, write every command that queued
+      // up behind it, in order, so the FIFO and the reply stream line up.
+      const flushQueued = () => {
+        while (queued.length) {
+          const { line, resolve } = queued.shift();
+          pending.push(resolve);
+          writeLine(line);
+        }
+      };
 
       const handleLine = (line) => {
         if (block) {
           if (line.startsWith('%end') || line.startsWith('%error')) {
             const out = line.startsWith('%error') ? [] : block;
             block = null;
+            if (!phantomSeen) {
+              // This is always the attach's own unsolicited reply — we wrote
+              // nothing yet, so nothing else could have produced a block.
+              phantomSeen = true;
+              flushQueued();
+              return;
+            }
             const resolve = pending.shift();
             if (resolve) resolve(out);
           } else {
