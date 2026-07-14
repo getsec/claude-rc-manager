@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.log
+
+# SDD dev scratch (briefs, reports, ledger) — never publish
+.superpowers/
+
+# Internal design/plan docs — not published
+docs/
+DESIGN.md
+AgentManager.dc.html
+support.js

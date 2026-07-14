@@ -1,0 +1,20 @@
+[Unit]
+Description=Agent Manager (Claude Code RC control panel)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Assumes this repo is cloned at ~/agent-manager. Adjust if you cloned elsewhere.
+WorkingDirectory=%h/agent-manager/backend
+# Use your node path; /usr/bin/node works on most distros. If you use a version
+# manager (nvm/mise/fnm), point this at that node, e.g. %h/.local/share/mise/shims/node
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+Environment=AM_STATIC=%h/agent-manager/frontend/dist
+# Loopback only by default. To reach the UI from your LAN, add your host's LAN IP:
+# Environment=AM_BIND=127.0.0.1,192.168.1.50
+
+[Install]
+WantedBy=default.target
