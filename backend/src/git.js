@@ -46,5 +46,15 @@ export function createGit(run, { root }) {
       const del = /(\d+) deletion/.exec(stdout);
       return { added: ins ? Number(ins[1]) : 0, removed: del ? Number(del[1]) : 0 };
     },
+    async dirtyCount(dir) {
+      const { stdout } = await ok(git('-C', dir, 'status', '--porcelain'));
+      return stdout.split('\n').filter((l) => l.trim()).length;
+    },
+    // Commits that exist on no remote, across ALL branches — not just the one
+    // checked out. This is the work a replace would destroy irrecoverably.
+    async localOnlyCount(dir) {
+      const { stdout } = await ok(git('-C', dir, 'log', '--branches', '--not', '--remotes', '--format=%H'));
+      return stdout.split('\n').filter((l) => l.trim()).length;
+    },
   };
 }
