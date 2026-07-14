@@ -73,7 +73,7 @@ export function Terminal({ instance, onClose }) {
     };
 
     // A `window` resize listener can never see the one event that matters
-    // most: the drawer itself appearing and its flex layout settling, which
+    // most: the overlay itself appearing and its flex layout settling, which
     // happens with no window resize at all. Observing the terminal's own
     // container catches that first layout plus every later change (window
     // resize included, since the container resizes along with it), so the
