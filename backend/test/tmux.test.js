@@ -142,3 +142,47 @@ test('kill() kills the child', () => {
   tmux.attach('app', { cols: 80, rows: 24 }).kill();
   assert.equal(child.killed, true);
 });
+
+test('kill() suppresses onExit for the subsequent close event', () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 80, rows: 24 });
+  let fired = false;
+  h.onExit(() => { fired = true; });
+  h.kill();
+  child.emit('close');
+  assert.equal(fired, false);
+});
+
+test('a command whose reply is %begin..%error resolves to an empty block', async () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 80, rows: 24 });
+  const seen = [];
+  h.onData((b) => seen.push(b.toString('latin1')));
+
+  const done = h.prime();
+  feed(child, '%begin 1 1 1\n%end 1 1 1\n');           // refresh-client
+  await tick();
+  feed(child, '%begin 2 2 1\n%error 2 2 1\n');          // capture-pane fails
+  await tick();
+  feed(child, '%begin 3 3 1\n%end 3 3 1\n');            // display-message
+  await done;
+
+  // Empty capture-pane block still paints, just with nothing between the
+  // clear/home escape and the cursor placement (row 1, col 1: no reply).
+  assert.equal(seen.join(''), '\x1b[H\x1b[2J\x1b[1;1H');
+});
+
+test('the child dying mid-command settles pending commands instead of hanging prime() forever', async () => {
+  const { child, tmux } = harness();
+  const h = tmux.attach('app', { cols: 80, rows: 24 });
+  h.onData(() => {});
+
+  const done = h.prime();
+  // No reply blocks are ever fed — the child just dies.
+  child.emit('close');
+
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('prime() did not settle after child death')), 200);
+  });
+  await Promise.race([done, timeout]);
+});

@@ -35,6 +35,11 @@ export function createTmux(spawn) {
       const finish = () => {
         if (exited) return;
         exited = true;
+        // Flush any commands still awaiting a %begin/%end reply — the child is
+        // gone, so no reply is ever coming. Resolve with an empty block (the
+        // same shape %error already produces) so callers like prime() settle
+        // instead of hanging forever.
+        while (pending.length) pending.shift()([]);
         onExit();
       };
 
@@ -44,6 +49,13 @@ export function createTmux(spawn) {
 
       // tmux answers every command with a %begin..%end block, in order.
       const command = (line) => new Promise((resolve) => {
+        // The child is already gone — nothing will ever reply, so don't queue
+        // a resolver finish() will never get another chance to flush. This
+        // matters for sequential callers like prime(): finish() only flushes
+        // whatever was in-flight *at the moment it ran*; later commands issued
+        // after death (e.g. prime()'s next `await command(...)`) must settle
+        // immediately too, or they'd hang forever.
+        if (exited) { resolve([]); return; }
         pending.push(resolve);
         send(line);
       });
@@ -93,6 +105,9 @@ export function createTmux(spawn) {
           send(`send-keys -t ${session} -H ${b.toString('hex').match(/../g).join(' ')}`);
         },
         resize: (c, r) => send(`refresh-client -C ${c}x${r}`),
+        // Marking exited before killing suppresses onExit for this teardown: the
+        // caller initiated it deliberately (e.g. the socket layer killing the
+        // session on socket close), so "the session exited" isn't news to them.
         kill: () => { exited = true; child.kill(); },
         async prime() {
           await command(`refresh-client -C ${cols}x${rows}`);
