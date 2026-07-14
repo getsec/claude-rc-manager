@@ -30,7 +30,14 @@ export const api = {
   removeProject: (name) => fetch(`/api/projects/${name}`, { method: 'DELETE' }),
   removeSession: (instance) => fetch(`/api/sessions/${instance}`, { method: 'DELETE' }),
   addProject: (url, opts, onStep) => streamNdjson('/api/projects', { url, ...opts }, onStep),
-  addSession: (name, branch, onStep) => streamNdjson(`/api/projects/${name}/sessions`, { branch }, onStep),
+  addSession: (name, branch, remoteControl, onStep) =>
+    streamNdjson(`/api/projects/${name}/sessions`, { branch, remoteControl }, onStep),
+  setRemoteControl: (instance, enabled) =>
+    fetch(`/api/sessions/${instance}/remote-control`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }).then((r) => r.json()),
   listProtocols: () => fetch('/api/protocols').then((r) => r.json()),
   getProtocol: (slug) => fetch(`/api/protocols/${slug}`).then((r) => r.json()),
   saveProtocol: (slug, data) => fetch(`/api/protocols/${slug}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),

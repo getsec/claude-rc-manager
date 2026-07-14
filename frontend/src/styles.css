@@ -149,8 +149,9 @@ body {
 .act-start:hover { background: color-mix(in srgb, var(--accent) 18%, var(--btn)); color: var(--accent); }
 .act-stop:hover  { background: color-mix(in srgb, var(--danger) 20%, var(--btn)); color: var(--danger); }
 .act-rst:hover   { background: color-mix(in srgb, var(--warn) 20%, var(--btn)); color: var(--warn); }
-.act-logs:hover  { background: color-mix(in srgb, var(--accent) 14%, var(--btn)); color: var(--accent); }
+.act-logs:hover, .act-rc:hover  { background: color-mix(in srgb, var(--accent) 14%, var(--btn)); color: var(--accent); }
 .act-logs.on { background: var(--accent-soft); color: var(--accent); }
+.act-rc.on { color: var(--accent); border-color: var(--accent); }
 .act-open:hover  { background: color-mix(in srgb, var(--accent) 14%, var(--btn)); color: var(--accent); }
 .act-remove:hover { background: color-mix(in srgb, var(--danger) 20%, var(--btn)); color: var(--danger); }
 .card-url-msg { margin-top: 6px; font-size: 10px; color: var(--text-faint); }

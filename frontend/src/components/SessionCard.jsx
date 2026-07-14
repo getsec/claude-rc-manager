@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { sessionView } from '../display.js';
 import { api } from '../api.js';
 
-export function SessionCard({ session, worktreeLabel, terminalOpen, onAction, onTerminal, onRemove }) {
+export function SessionCard({ session, worktreeLabel, terminalOpen, onAction, onTerminal, onRemove, onRemoteControl }) {
   const name = session.instance;
   const [urlMsg, setUrlMsg] = useState(null);
   const [git, setGit] = useState({ branch: null, added: 0, removed: 0 });
@@ -39,6 +39,14 @@ export function SessionCard({ session, worktreeLabel, terminalOpen, onAction, on
     if (window.confirm(`Remove session "${name}"?`)) onRemove(name);
   };
 
+  const toggleRemoteControl = () => {
+    const next = !session.remoteControl;
+    // ExecStart is only read at start, so this needs a restart — and a restart
+    // costs the agent its in-memory context. Say so rather than "Are you sure?".
+    if (!window.confirm(`Turn remote control ${next ? 'on' : 'off'} for "${name}"? This restarts the session — a running agent loses its context.`)) return;
+    onRemoteControl(name, next);
+  };
+
   return (
     <div className="card">
       <div className="card-top">
@@ -62,9 +70,14 @@ export function SessionCard({ session, worktreeLabel, terminalOpen, onAction, on
           <button className="act-stop" onClick={() => onAction(name, 'stop')}>stop</button>
           <button className="act-rst" onClick={() => onAction(name, 'restart')}>rst</button>
           <button className={`act-logs${terminalOpen ? ' on' : ''}`} onClick={() => onTerminal(name)}>terminal</button>
+          <button
+            className={`act-rc${session.remoteControl ? ' on' : ''}`}
+            title="remote control"
+            onClick={toggleRemoteControl}
+          >rc</button>
         </div>
         <div className="card-actions">
-          {v.state !== 'stopped' && <button className="act-open" onClick={openSession}>open ↗</button>}
+          {v.state !== 'stopped' && session.remoteControl && <button className="act-open" onClick={openSession}>open ↗</button>}
           <button className="act-remove" onClick={removeSession}>delete</button>
         </div>
       </div>

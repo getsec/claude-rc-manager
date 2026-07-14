@@ -33,6 +33,7 @@ function cloneView(clone) {
     trust: `enabling claude-rc@${name} …`,
     enable: `enabling claude-rc@${name} …`,
     record: `enabling claude-rc@${name} …`,
+    'remote-control': `enabling claude-rc@${name} …`,
     coord: `scaffolding ${name}-coord …`,
     'multi-agent': 'dropping MULTI_AGENT.md …',
     done: `enabled claude-rc@${name} · session online`,
@@ -140,6 +141,7 @@ export function App() {
               onAction={(instance, action) => api.action(instance, action)}
               onTerminal={(instance) => setTerminalInstance((cur) => (cur === instance ? null : instance))}
               onRemove={removeSessionCard}
+              onRemoteControl={(instance, enabled) => api.setRemoteControl(instance, enabled)}
             />
           );
         })}
@@ -187,7 +189,7 @@ export function App() {
                   Remove
                 </button>
               </div>
-              <AddSession project={name} />
+              <AddSession project={name} defaultRemoteControl={!!sessions.find((s) => s.instance === name)?.remoteControl} />
             </div>
           );
         })}

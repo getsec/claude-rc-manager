@@ -7,12 +7,12 @@ beforeEach(() => {
   vi.spyOn(api, 'listProtocols').mockResolvedValue([{ slug: 'compose-portblock', name: 'Compose port-block' }]);
 });
 
-test('submitting a git URL calls onSubmit with the trimmed value and empty opts', () => {
+test('submitting a git URL calls onSubmit with the trimmed value and default opts', () => {
   const onSubmit = vi.fn();
   render(<AddProject onSubmit={onSubmit} busy={false} />);
   fireEvent.change(screen.getByPlaceholderText(/git url/i), { target: { value: '  https://x/foo.git  ' } });
   fireEvent.click(screen.getByText(/add project/i));
-  expect(onSubmit).toHaveBeenCalledWith('https://x/foo.git', {});
+  expect(onSubmit).toHaveBeenCalledWith('https://x/foo.git', { remoteControl: false });
 });
 
 test('does not submit while busy', () => {
@@ -30,5 +30,5 @@ test('toggling multi-session loads protocols and includes the pick in onSubmit',
   await waitFor(() => expect(screen.getByText('Compose port-block')).toBeTruthy());
   fireEvent.change(screen.getByPlaceholderText(/git url/i), { target: { value: 'https://x/foo.git' } });
   fireEvent.click(screen.getByText(/add project/i));
-  expect(onSubmit).toHaveBeenCalledWith('https://x/foo.git', { multiSession: true, protocol: 'compose-portblock' });
+  expect(onSubmit).toHaveBeenCalledWith('https://x/foo.git', { remoteControl: false, multiSession: true, protocol: 'compose-portblock' });
 });
